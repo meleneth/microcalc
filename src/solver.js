@@ -31,6 +31,23 @@ export function combatXpForSoloKill(initialHp) {
   // Applies only to full solo kills where all damage was attributed to this player.
   return 2*initialHp;
 }
+// Expected number of attacks to remove a finite HP pool. A successful attack
+// uniformly deals 1..maxHit; a miss costs an attack without dealing damage.
+// Crucially, excess damage on the killing blow earns no XP and cannot make the
+// next monster spawn sooner. This avoids treating tiny mobs as bottomless HP.
+export function expectedAttacksToKill(hp,maxHit,pHit) {
+  if(!Number.isInteger(hp)||hp<0||!Number.isInteger(maxHit)||maxHit<1||
+    !Number.isFinite(pHit)||pHit<=0||pHit>1)
+    throw new RangeError("Invalid expected-attacks inputs");
+  const e=new Float64Array(hp+1);
+  for(let remaining=1;remaining<=hp;remaining++){
+    let next=0;
+    for(let damage=1;damage<=maxHit;damage++)
+      next+=e[Math.max(0,remaining-damage)];
+    e[remaining]=1/pHit+next/maxHit;
+  }
+  return e[hp];
+}
 export function evaluate(mob,stats,rules={}) {
   const attack=stats.attack+stats.attackBonus;
   const strength=stats.strength+stats.strengthBonus;
@@ -41,8 +58,8 @@ export function evaluate(mob,stats,rules={}) {
   // Interpolation is used ONLY in this observed range, not extrapolated.
   const cowObserved=mob.name==="Cow"&&mob.defense===5&&attack>=17&&attack<=24;
   const pHit=cowObserved?0.55+attack/100:chance(attack,mob.defense);
-  const dps=pHit*(maxHit+1)/2/cooldown;
-  const ttk=mob.hp/Math.max(0.001,dps);
+  const attacks=expectedAttacksToKill(mob.hp,maxHit,pHit);
+  const ttk=attacks*cooldown;
   const enemyMax=Math.max(1,Math.floor(1+mob.strength/10));
   const enemyHit=chance(mob.attack,defense);
   const enemyDps=enemyHit*(enemyMax+1)/2/Math.max(0.5,stats.enemyCooldown);
@@ -64,10 +81,13 @@ export function evaluate(mob,stats,rules={}) {
   const safe=(stats.hitpoints-expectedDamage)>0 || (effectiveFoodHeal>0 && stats.foodCount>=Math.ceil(effectiveFoodNeeded));
   const respawnDelay=Math.max(0,stats.respawnDelaySeconds??4.5);
   const searchDelay=Math.max(0,stats.searchSeconds);
-  const cycle=ttk+respawnDelay+searchDelay+Math.max(0,stats.bankSeconds)/Math.max(1,stats.killsPerBank)
-    +(food?food.extraSecondsPerKill:Math.max(0,stats.foodRestockSeconds)*foodNeeded);
+  const bankDelay=Math.max(0,stats.bankSeconds)/Math.max(1,stats.killsPerBank);
+  const supplyDelay=food?food.extraSecondsPerKill:Math.max(0,stats.foodRestockSeconds)*foodNeeded;
+  const cycle=ttk+respawnDelay+searchDelay+bankDelay+supplyDelay;
+  const timeBreakdown={combat:ttk,respawn:respawnDelay,search:searchDelay,
+    banking:bankDelay,supplies:supplyDelay,total:cycle};
   const xpPerKill=combatXpForSoloKill(mob.hp); // 2 XP per actual HP depleted, assuming player deals all damage.
-  return {mob,ttk,respawnDelay,searchDelay,enemyDps,expectedDamage,foodNeeded:effectiveFoodNeeded,foodEconomy:food,safe,maxHit,pHit,accuracySource:cowObserved?"observed-cow-interpolation":"provisional",xpPerKill,xpPerHour:xpPerKill*3600/cycle,killsPerHour:3600/cycle,cycle};
+  return {mob,ttk,attacks,respawnDelay,searchDelay,timeBreakdown,enemyDps,expectedDamage,foodNeeded:effectiveFoodNeeded,foodEconomy:food,safe,maxHit,pHit,accuracySource:cowObserved?"observed-cow-interpolation":"provisional",xpPerKill,xpPerHour:xpPerKill*3600/cycle,killsPerHour:3600/cycle,cycle};
 }
 export function rankTargets(stats) {
   return mobs.map(m=>evaluate(m,stats))
