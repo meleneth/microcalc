@@ -36,7 +36,7 @@ const defaultOptions={
   simulatedMonsterMaxHit:true
 };
 const level=(s,k)=>s[k]??1;
-const toKey=s=>SKILLS.map(k=>s[k]).join(":")+"|"+s.gear.join(",");
+const toKey=s=>SKILLS.map(k=>s[k]).join(":")+"|"+s.gear.join(",")+"|"+(s.potion??"none");
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const nextMilestone=(skill,v,limit)=>{
   if(v>=limit)return null;
@@ -91,29 +91,27 @@ function combatStats(state,optionFood,options){
 function evaluateMob(state,mob,opts,food){
   const stats=combatStats(state,food,opts);
   const base=evaluate(mob,stats);
-  // Potion use is a *recurring* cost, never a permanent free strength bonus.
-  // Estimate a dose from 32 expected Bear kills + verified 386s brewing.
-  // No potion is considered until Herblaw 13 and Bear farming is viable.
-  const root=gameConstraints.strengthPotion;
-  let result=base, potion=null;
-  if(state.herblaw>=root.level && mob.name!=="Bear"){
-    const bear=mobs.find(x=>x.name==="Bear");
-    const bearFight=evaluate(bear,stats);
-    if(bearFight.safe && (!food || bearFight.foodNeeded<=opts.maxFoodPerKill)){
-      const supplySeconds=32*bearFight.cycle+root.craftSeconds;
-      const boosted=evaluate(mob,{...stats,strengthBonus:stats.strengthBonus+root.boost});
-      const totalSeconds=boosted.cycle*(1+supplySeconds/root.durationSeconds);
-      const boostedRate=3600/totalSeconds;
-      if(boosted.safe && boostedRate>base.killsPerHour && (!food || boosted.foodNeeded<=opts.maxFoodPerKill)){
-        result={...boosted,cycle:totalSeconds,killsPerHour:boostedRate,
-          xpPerHour:boostedRate*boosted.xpPerKill,
-          timeBreakdown:{...boosted.timeBreakdown,
-            supplies:boosted.timeBreakdown.supplies+(totalSeconds-boosted.cycle),
-            total:totalSeconds}};
-        potion={name:"strength potion",strengthBonus:root.boost,
-          supplySecondsPerDose:supplySeconds,durationSeconds:root.durationSeconds};
-      }
-    }
+  // Potion is a persistent loadout decision. Never select it opportunistically
+  // on individual monsters. Continuous uptime has recurring root and mixing costs.
+  let result=base,potion=null;
+  if(state.potion==="strength"){
+    const recipe=gameConstraints.strengthPotion;
+    const bear=mobs.find(x=>x.name===recipe.source);
+    const bearBase=evaluate(bear,stats);
+    const supplySeconds=expectedKillsForDrop(recipe.source,recipe.requiredDrop)*
+      bearBase.cycle+recipe.craftSeconds;
+    const boosted=evaluate(mob,{...stats,strengthBonus:stats.strengthBonus+recipe.boost});
+    const multiplier=1+supplySeconds/recipe.durationSeconds;
+    const totalSeconds=boosted.cycle*multiplier;
+    result={...boosted,cycle:totalSeconds,killsPerHour:3600/totalSeconds,
+      xpPerHour:3600/totalSeconds*boosted.xpPerKill,
+      timeBreakdown:{...boosted.timeBreakdown,
+        supplies:boosted.timeBreakdown.supplies+totalSeconds-boosted.cycle,
+        total:totalSeconds}};
+    potion={name:"strength potion",strengthBonus:recipe.boost,
+      source:recipe.source,ingredient:recipe.requiredDrop,
+      mixingSecondsPerDose:recipe.craftSeconds,
+      supplySecondsPerDose:supplySeconds,durationSeconds:recipe.durationSeconds};
   }
   const sustainable=food?result.foodNeeded<=opts.maxFoodPerKill:result.expectedDamage<=0;
   return {...result,safe:result.safe&&sustainable,food:food?.id??"none",potion};
@@ -236,6 +234,25 @@ function trainingOptions(state,opts){
   }
   return actions;
 }
+function potionActions(state,opts){
+  if(state.potion||state.herblaw<gameConstraints.strengthPotion.level)return [];
+  const recipe=gameConstraints.strengthPotion;
+  if(!opts.encounterAvailability.includes(recipe.source))return [];
+  if(!Number.isFinite(expectedKillsForDrop(recipe.source,recipe.requiredDrop)))return [];
+  // The ingredient is only available from a modeled monster the player can
+  // actually fight. Supply fights and each 386-second brew are charged by
+  // evaluateMob once continuous use is selected.
+  const source=mobs.find(m=>m.name===recipe.source);
+  const viable=viableFights(state,opts).some(f=>f.mob.name===source?.name);
+  if(!viable)return [];
+  return [{
+    potion:"strength",seconds:0.001,
+    detail:"Maintain Strength potion continuously (farm Bear for limpwurt roots, mix every dose)",
+    meta:{potionUnlock:true,source:recipe.source,ingredient:recipe.requiredDrop,
+      mixingSecondsPerDose:recipe.craftSeconds,
+      note:"Modeled supply and mixing time are charged on every subsequent encounter."}
+  }];
+}
 function gearActions(state,opts){
   if(!opts.equipmentAcquisitionEnabled)return [];
   const result=[];
@@ -313,7 +330,7 @@ function estimateRemaining(state,opts,fight){
 }
 const dominates=(a,b)=>a.cost<=b.cost+1e-9&&
   COMBAT.every(k=>a.state[k]>=b.state[k]);
-function bucketFor(s){return [s.fishing,s.cooking,s.herblaw,s.gear.join(",")].join("|");}
+function bucketFor(s){return [s.fishing,s.cooking,s.herblaw,s.gear.join(","),s.potion??"none"].join("|");}
 function reconstruct(entry,nodes){
   const steps=[];let key=entry?.key;
   while(key&&nodes.get(key)?.parent){
@@ -331,7 +348,7 @@ export function* solveGoldenPathProgress(userOptions={}){
   const opts={...defaultOptions,...userOptions};
   for(const v of ["maxStates","maxLevel","minimumKnightKillsPerHour","maxFoodPerKill"])
     if(!Number.isFinite(opts[v])||opts[v]<=0)throw new RangeError(`Invalid ${v}`);
-  const initial={attack:1,strength:1,defense:1,fishing:1,cooking:1,herblaw:1,gear:[]};
+  const initial={attack:1,strength:1,defense:1,fishing:1,cooking:1,herblaw:1,gear:[],potion:null};
   const heap=new Heap(),dist=new Map(),nodes=new Map(),buckets=new Map();
   const startKey=toKey(initial);
   const begin={key:startKey,state:initial,cost:0};
@@ -380,12 +397,13 @@ export function* solveGoldenPathProgress(userOptions={}){
     }
     if(expanded===1||expanded%25===0)yield snapshot();
     if(node.cost>=opts.maxSeconds)continue;
-    const actions=[...trainingOptions(state,opts),...gearActions(state,opts)];
+    const actions=[...trainingOptions(state,opts),...gearActions(state,opts),...potionActions(state,opts)];
     for(const action of actions){
       if(!Number.isFinite(action.seconds)||action.seconds<=0)continue;
       const next={...state,gear:state.gear};
       if(action.skill)next[action.skill]=action.to;
       if(action.gear)next.gear=[...state.gear,action.gear].sort();
+      if(action.potion)next.potion=action.potion;
       const key=toKey(next),cost=node.cost+action.seconds;
       if(cost>opts.maxSeconds||(incumbent&&cost>=incumbent.cost)||
         cost>=(dist.get(key)??Infinity))continue;
@@ -428,6 +446,7 @@ export function* solveGoldenPathProgress(userOptions={}){
     expectedPotionDoses:steps.reduce((sum,step)=>sum+(step.meta?.expectedPotions??0),0),
     totalPotionSupplySeconds:steps.reduce((sum,step)=>sum+(step.meta?.potionSupplySeconds??0),0),
     finalEquipment:bestEquipped(found?.state??initial).names,
+    finalPotion:found?.state?.potion??null,
     foodTotals:steps.reduce((totals,step)=>{
       for(const [id,quantity] of Object.entries(step.meta?.foodTotals??{}))
         totals[id]=(totals[id]??0)+quantity;
