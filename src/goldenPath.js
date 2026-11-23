@@ -105,7 +105,10 @@ function evaluateMob(state,mob,opts,food){
       const boostedRate=3600/totalSeconds;
       if(boosted.safe && boostedRate>base.killsPerHour && (!food || boosted.foodNeeded<=opts.maxFoodPerKill)){
         result={...boosted,cycle:totalSeconds,killsPerHour:boostedRate,
-          xpPerHour:boostedRate*boosted.xpPerKill};
+          xpPerHour:boostedRate*boosted.xpPerKill,
+          timeBreakdown:{...boosted.timeBreakdown,
+            supplies:boosted.timeBreakdown.supplies+(totalSeconds-boosted.cycle),
+            total:totalSeconds}};
         potion={name:"strength potion",strengthBonus:root.boost,
           supplySecondsPerDose:supplySeconds,durationSeconds:root.durationSeconds};
       }
