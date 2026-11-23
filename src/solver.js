@@ -15,12 +15,17 @@ function chance(offense,defense) {
   const a=Math.max(1,offense),d=Math.max(1,defense);
   return clamp(a/(a+d),0.05,0.95);
 }
+export function meleeMaxHit(effectiveStrength,flatBonus=0) {
+  // Reported mechanic: one more maximum melee damage per 6 effective Strength.
+  // The baseline +1 matches the screenshot: 13 effective Strength -> 3 max hit.
+  return Math.max(1,1+Math.floor(Math.max(0,effectiveStrength)/6)+flatBonus);
+}
 export function evaluate(mob,stats,rules={}) {
   const attack=stats.attack+stats.attackBonus;
   const strength=stats.strength+stats.strengthBonus;
   const defense=stats.defense+stats.defenseBonus;
   const cooldown=Math.max(0.5,stats.cooldown);
-  const maxHit=Math.max(1,Math.floor(1+strength/10+stats.damageBonus));
+  const maxHit=meleeMaxHit(strength,stats.damageBonus);
   const pHit=chance(attack,mob.defense);
   const dps=pHit*(maxHit+1)/2/cooldown;
   const ttk=mob.hp/Math.max(0.001,dps);
