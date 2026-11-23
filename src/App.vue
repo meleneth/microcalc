@@ -4,10 +4,13 @@ import { usePlanner } from "./stores/planner.js";
 import { sources } from "./data.js";
 import { strengthPotionValue, strengthPotionDependency } from "./progression.js";
 import { foods } from "./foods.js";
+import { mobs } from "./data.js";
+import { evaluate } from "./solver.js";
 const store=usePlanner();
 const fmt=n=>Number.isFinite(n)?Math.round(n).toLocaleString():"—";
 const hours=s=>Number.isFinite(s)?(s/3600).toFixed(1):"—";
-const knight=computed(()=>store.plan.knight);
+const blackKnight=mobs.find(mob=>mob.name==="Black knight");
+const knight=computed(()=>evaluate(blackKnight,store.settings));
 const strengthSupply=computed(()=>strengthPotionDependency(1,store.settings));
 const strengthBoost=computed(()=>strengthPotionValue(store.settings.strength+store.settings.strengthBonus,1,store.settings));
 const inputs=[
