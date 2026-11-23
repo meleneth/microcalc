@@ -46,7 +46,7 @@ const nextMilestone=(skill,v,limit)=>{
     [2,4,10,13,20,30];
   return fixed.find(x=>x>v&&x<=limit)??limit;
 };
-function bestEquipped(state){
+export function bestEquipped(state){
   const available=earlyGear.filter(g=>state.gear.includes(g.name)
     &&Object.entries(g.requirements).every(([k,v])=>level(state,k)>=v));
   const bySlot=new Map();
@@ -151,7 +151,7 @@ function knightAssessment(state,opts){
 function priceTraining(state,skill,target,opts){
   const segments=[];let seconds=0,kills=0,totalXp=0;
   const foodTotals={};
-  let expectedFood=0,foodSupplySeconds=0;
+  let expectedFood=0,foodSupplySeconds=0,expectedPotions=0,potionSupplySeconds=0;
   const timeBreakdown={combat:0,respawn:0,search:0,banking:0,supplies:0};
   for(let current=state[skill];current<target;current++){
     const intermediate={...state,[skill]:current};
@@ -164,6 +164,13 @@ function priceTraining(state,skill,target,opts){
     seconds+=duration;kills+=n;totalXp+=amount;
     const eaten=n*(fight.foodEconomy?.foodPerKill??0);
     const acquiredSeconds=n*(fight.foodEconomy?.foodSecondsPerKill??0);
+    const potionCostPerKill=fight.potion?
+      (fight.potion.supplySecondsPerDose/fight.potion.durationSeconds)*
+        (fight.cycle/(1+fight.potion.supplySecondsPerDose/fight.potion.durationSeconds)):0;
+    const doses=fight.potion?
+      n*(fight.cycle-potionCostPerKill)/fight.potion.durationSeconds:0;
+    expectedPotions+=doses;
+    potionSupplySeconds+=doses*(fight.potion?.supplySecondsPerDose??0);
     if(fight.food!=="none"){
       foodTotals[fight.food]=(foodTotals[fight.food]??0)+eaten;
       expectedFood+=eaten;
@@ -176,11 +183,14 @@ function priceTraining(state,skill,target,opts){
       previous.potion===(fight.potion?.name??null)){
       previous.to=current+1;previous.kills+=n;previous.seconds+=duration;
       previous.expectedFood+=eaten;previous.foodSupplySeconds+=acquiredSeconds;
+      previous.expectedPotions+=doses;previous.potionSupplySeconds+=doses*(fight.potion?.supplySecondsPerDose??0);
     }else segments.push({from:current,to:current+1,monster:fight.mob.name,
       food:fight.food,potion:fight.potion?.name??null,kills:n,seconds:duration,
-      expectedFood:eaten,foodSupplySeconds:acquiredSeconds});
+      expectedFood:eaten,foodSupplySeconds:acquiredSeconds,
+      expectedPotions:doses,potionSupplySeconds:doses*(fight.potion?.supplySecondsPerDose??0),
+      equipped:bestEquipped(intermediate).names});
   }
-  return {seconds,kills,totalXp,segments,timeBreakdown,expectedFood,foodTotals,foodSupplySeconds};
+  return {seconds,kills,totalXp,segments,timeBreakdown,expectedFood,foodTotals,foodSupplySeconds,expectedPotions,potionSupplySeconds};
 }
 function trainingOptions(state,opts){
   const actions=[];
@@ -204,7 +214,8 @@ function trainingOptions(state,opts){
             "strength-breakpoint":"level",
           segments:priced.segments,timeBreakdown:priced.timeBreakdown,
           expectedFood:priced.expectedFood,foodTotals:priced.foodTotals,
-          foodSupplySeconds:priced.foodSupplySeconds}});
+          foodSupplySeconds:priced.foodSupplySeconds,
+          expectedPotions:priced.expectedPotions,potionSupplySeconds:priced.potionSupplySeconds}});
     }
   }
   for(const skill of ["fishing","cooking","herblaw"]){
@@ -412,6 +423,9 @@ export function* solveGoldenPathProgress(userOptions={}){
     totalSeconds:found?.cost??0,steps,
     totalExpectedFood:steps.reduce((sum,step)=>sum+(step.meta?.expectedFood??0),0),
     totalFoodSupplySeconds:steps.reduce((sum,step)=>sum+(step.meta?.foodSupplySeconds??0),0),
+    expectedPotionDoses:steps.reduce((sum,step)=>sum+(step.meta?.expectedPotions??0),0),
+    totalPotionSupplySeconds:steps.reduce((sum,step)=>sum+(step.meta?.potionSupplySeconds??0),0),
+    finalEquipment:bestEquipped(found?.state??initial).names,
     foodTotals:steps.reduce((totals,step)=>{
       for(const [id,quantity] of Object.entries(step.meta?.foodTotals??{}))
         totals[id]=(totals[id]??0)+quantity;
