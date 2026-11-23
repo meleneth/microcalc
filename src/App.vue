@@ -15,7 +15,7 @@ const inputs=[
  ["defenseBonus","Equipment defence",0,500],["damageBonus","Flat max-hit bonus",0,100],
  ["cooldown","Attack seconds",0.5,60],["enemyCooldown","Enemy attack seconds",0.5,60],
  ["foodHeal","Food HP healed",0,100],["foodCount","Food per trip",0,100],["regenPerSecond","Passive HP / second",0,10],
- ["searchSeconds","Search seconds / kill",0,600],["bankSeconds","Bank round-trip seconds",0,3600],["killsPerBank","Kills per bank trip",1,1000],
+ ["respawnDelaySeconds","Between-monster delay (estimated)",0,60],["searchSeconds","Loot/search seconds / kill",0,600],["bankSeconds","Bank round-trip seconds",0,3600],["killsPerBank","Kills per bank trip",1,1000],
  ["foodRestockSeconds","Food restock seconds / unit",0,600],["xpPerDamage","Assumed XP / damage",0.1,100]
 ];
 </script>
@@ -25,12 +25,13 @@ const inputs=[
   <section class="intro"><p class="eyebrow">PROGRESSION ENGINE / 001</p><h1>The road to <span>Black Knight.</span></h1><p>Compare ordinary combat encounters, then chart a progression route. No rare gauntlets, no safe spots, no magical endgame shortcuts.</p></section>
   <div class="layout">
    <aside class="panel"><h2>01 / Loadout and rules</h2><p class="note">Stats are editable. Unverified combat formulas and XP awards are explicit approximations.</p>
-    <div class="inputs"><label v-for="[key,label,min,max] in inputs" :key="key"><span>{{label}}</span><input type="number" :min="min" :max="max" :step="key==='cooldown'||key==='enemyCooldown'||key==='xpPerDamage'||key==='regenPerSecond'?0.1:1" v-model.number="store.settings[key]" /></label></div>
+    <div class="inputs"><label v-for="[key,label,min,max] in inputs" :key="key"><span>{{label}}</span><input type="number" :min="min" :max="max" :step="key==='cooldown'||key==='enemyCooldown'||key==='xpPerDamage'||key==='regenPerSecond'||key==='respawnDelaySeconds'?0.1:1" v-model.number="store.settings[key]" /></label></div>
     <label class="toggle"><input type="checkbox" v-model="store.settings.allowBlackKnight"/> Include Black Knight in training choices</label>
    </aside>
    <main class="results">
     <section class="panel"><div class="section-head"><h2>02 / Combat viability</h2><span class="tag">STANDARD ENCOUNTER</span></div>
       <div class="metrics"><div><small>Time to defeat</small><strong>{{knight.ttk.toFixed(1)}}s</strong></div><div><small>Expected damage</small><strong>{{knight.expectedDamage.toFixed(1)}} HP</strong></div><div><small>Food / kill</small><strong>{{knight.foodNeeded.toFixed(2)}}</strong></div><div><small>Estimated kills / hr</small><strong>{{knight.killsPerHour.toFixed(1)}}</strong></div></div>
+      <p class="note">Per kill: {{knight.ttk.toFixed(1)}}s fighting + {{knight.respawnDelay.toFixed(1)}}s between monsters + {{knight.searchDelay.toFixed(1)}}s searching, plus amortized banking and supplies. The 4.5s default is an unverified midpoint of the reported 3–6s interval.</p>
       <p class="warning">Expected values are not survival guarantees. Simulating variance and exact game rolls is a future calibration requirement.</p>
     </section>
     <section class="panel"><div class="section-head"><h2>SUPPLY / Bear → Strength Potion</h2><span class="tag">HERBLAW 13</span></div>
