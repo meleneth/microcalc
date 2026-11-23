@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { xpRemaining, levelAt, evaluate, goldenPath, defaults, meleeMaxHit } from "../src/solver.js";
+import { xpRemaining, levelAt, evaluate, goldenPath, defaults, meleeMaxHit, combatXpForHit, combatXpForSoloKill } from "../src/solver.js";
 import { mobs, xp } from "../src/data.js";
 test("wiki XP thresholds",()=>{assert.equal(xp.length,99);assert.equal(xp[98],130344310);assert.equal(levelAt(830),2);assert.equal(xpRemaining(0,40),372240);});
 test("Black knight wiki stats",()=>{const k=mobs.find(x=>x.name==="Black knight");assert.deepEqual([k.hp,k.attack,k.strength,k.defense],[38,30,41,42]);});
@@ -24,4 +24,24 @@ test("between-monster delay is separate from loot search and banking",()=>{
  assert.ok(slow.xpPerHour<fast.xpPerHour);
  assert.equal(slow.searchDelay,0);
  assert.equal(evaluate(mob,{...base,searchSeconds:3}).cycle-fast.cycle,3);
+});
+
+test("combat experience caps overkill and awards 2 XP per actual damage",()=>{
+  assert.equal(combatXpForHit(10,3),6);
+  assert.equal(combatXpForHit(2,8),4);
+  assert.equal(combatXpForHit(0,8),0);
+  assert.equal(combatXpForHit(5,0),0);
+  assert.equal(combatXpForSoloKill(8),16);
+  assert.equal(combatXpForSoloKill(38),76);
+  assert.equal(evaluate(mobs.find(m=>m.name==="Cow"),{...defaults,xpPerDamage:999}).xpPerKill,16);
+  assert.throws(()=>combatXpForHit(-1,5));
+});
+test("Cow hit chances interpolate only within observations",()=>{
+ const cow=mobs.find(m=>m.name==="Cow");
+ for(const [effectiveAttack,expected] of [[17,0.72],[22,0.77],[24,0.79]]){
+   const result=evaluate(cow,{...defaults,attack:effectiveAttack,attackBonus:0});
+   assert.ok(Math.abs(result.pHit-expected)<1e-10);
+   assert.equal(result.accuracySource,"observed-cow-interpolation");
+ }
+ assert.equal(evaluate(cow,{...defaults,attack:30}).accuracySource,"provisional");
 });
