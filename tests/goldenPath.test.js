@@ -25,7 +25,7 @@ test("progress generator reports exploration and returns a route",()=>{
  const updates=[];
  let next=generator.next();
  while(!next.done){updates.push(next.value);next=generator.next();}
- assert.ok(updates.some(e=>e.phase==="search"&&e.expanded>0));
+ assert.ok(updates.some(e=>e.phase==="feasibility"&&e.expanded>0));
  assert.ok(updates.some(e=>e.phase==="route"));
  assert.equal(next.value.expanded>0,true);
 });
@@ -74,4 +74,15 @@ test("food consumption is accounted for in route and time score",()=>{
  }
  const byFood=Object.values(r.foodTotals).reduce((sum,n)=>sum+n,0);
  assert.ok(Math.abs(byFood-r.totalExpectedFood)<1e-7);
+});
+
+test("route report preserves total time, food and potion doses",()=>{
+ const r=solveGoldenPath({maxStates:80,maxLevel:14,minimumKnightKillsPerHour:999});
+ const seconds=r.jobs.reduce((sum,j)=>sum+j.seconds,0);
+ const food=r.jobs.reduce((sum,j)=>sum+(j.expectedFood??0),0);
+ const doses=r.jobs.reduce((sum,j)=>sum+(j.expectedPotions??0),0);
+ assert.ok(Math.abs(seconds-r.totalSeconds)<1e-5);
+ assert.ok(Math.abs(food-r.totalExpectedFood)<1e-5);
+ assert.ok(Math.abs(doses-r.expectedPotionDoses)<1e-5);
+ assert.equal(r.start.potion,null);
 });
