@@ -1,8 +1,7 @@
 // Source: https://microwiki.mhmm.pl/items (checked 2026-11-23).
-// Attack cooldown shown as 6s for daggers/scimitars in third-party gear planner;
-// the wiki lists attackCooldown +3. Do not infer speed from that wiki modifier alone.
-// Weapon cooldown values below are provisional: verify item detail before simulation.
-// Excludes availability, acquisition cost and travel requirements.
+// The wiki displays +3 attackCooldown for daggers/scimitars, but its
+// units and relationship to displayed attack interval are not established.
+// Excludes availability, acquisition cost, and travel requirements.
 export const earlyGear = [
   {
     "name": "bronze dagger",
@@ -15,7 +14,7 @@ export const earlyGear = [
       "strength": 1,
       "defense": 0
     },
-    "attackCooldownSeconds": 6,
+    "attackCooldownModifier": 3,
     "source": "https://microwiki.mhmm.pl/items"
   },
   {
@@ -29,7 +28,7 @@ export const earlyGear = [
       "strength": 2,
       "defense": 0
     },
-    "attackCooldownSeconds": 6,
+    "attackCooldownModifier": 3,
     "source": "https://microwiki.mhmm.pl/items"
   },
   {
@@ -57,7 +56,7 @@ export const earlyGear = [
       "strength": 4,
       "defense": 0
     },
-    "attackCooldownSeconds": 6,
+    "attackCooldownModifier": 3,
     "source": "https://microwiki.mhmm.pl/items"
   },
   {
@@ -71,7 +70,7 @@ export const earlyGear = [
       "strength": 5,
       "defense": 0
     },
-    "attackCooldownSeconds": 6,
+    "attackCooldownModifier": 3,
     "source": "https://microwiki.mhmm.pl/items"
   },
   {
@@ -85,7 +84,7 @@ export const earlyGear = [
       "strength": 5,
       "defense": 0
     },
-    "attackCooldownSeconds": 6,
+    "attackCooldownModifier": 3,
     "source": "https://microwiki.mhmm.pl/items"
   },
   {
@@ -99,7 +98,7 @@ export const earlyGear = [
       "strength": 7,
       "defense": 0
     },
-    "attackCooldownSeconds": 6,
+    "attackCooldownModifier": 3,
     "source": "https://microwiki.mhmm.pl/items"
   },
   {
