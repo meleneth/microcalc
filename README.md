@@ -46,7 +46,7 @@ player travel and survivability need further calibration.
 
 Each solo kill now uses finite-HP expected attack counts, rather than
 `HP / average DPS`, so overkill on tiny monsters cannot create fictitious
-combat throughput. Time is itemized into fighting, the configurable 4.5-second
+combat throughput. Time is itemized into fighting, the configurable 5-second
 between-monster delay (estimated), looting/search, banking and food/potion
 supply. The delay is charged once per kill, not once per training action.
 A multi-level Strength action is repriced at each intermediate level and may
