@@ -47,7 +47,7 @@ export function evaluate(mob,stats,rules={}) {
   const enemyHit=chance(mob.attack,defense);
   const enemyDps=enemyHit*(enemyMax+1)/2/Math.max(0.5,stats.enemyCooldown);
   const expectedDamage=ttk*enemyDps;
-  const selectedFood=stats.foodId??"sardine";
+  const selectedFood=stats.foodId??"trout";
   const foodHeal=Math.max(0,stats.foodHeal??4);
   const foodNeeded=Math.max(0,expectedDamage-stats.regenPerSecond*ttk)/(foodHeal||Infinity);
   const usingItemEconomy=stats.useFoodEconomy===true;
@@ -57,7 +57,7 @@ export function evaluate(mob,stats,rules={}) {
     foodCount:Math.max(0,stats.foodCount),foodCooldownSeconds:Math.max(0,stats.foodCooldownSeconds??0),
     supplySecondsPerFood:Math.max(0,stats.foodSupplySeconds??0),
     eatActionSeconds:Math.max(0,stats.eatActionSeconds??0),
-    mode:stats.foodCooldownMode??"blocking"
+    mode:stats.foodCooldownMode??"unattended"
   }):null;
   const effectiveFoodNeeded=food?food.foodPerKill:foodNeeded;
   const effectiveFoodHeal=food?food.heal:foodHeal;
@@ -95,4 +95,4 @@ export function goldenPath(stats,goal={attack:40,strength:40,defense:40}) {
   const knight=evaluate(mobs.find(m=>m.name==="Black knight"),{...state,allowBlackKnight:true});
   return {steps,state,knight,reachable:targets.every(s=>state[s]>=goal[s]),totalSeconds:steps.reduce((n,s)=>n+s.seconds,0),method:"greedy-estimate"};
 }
-export const defaults={attack:1,strength:1,defense:1,hitpoints:10,attackBonus:0,strengthBonus:0,defenseBonus:0,damageBonus:0,cooldown:6,enemyCooldown:6,foodHeal:0,foodCount:0,useFoodEconomy:false,foodId:"sardine",foodRecoveryBonus:0,foodCooldownSeconds:0,foodSupplySeconds:0,eatActionSeconds:0,foodCooldownMode:"blocking",regenPerSecond:0,searchSeconds:0,respawnDelaySeconds:4.5,bankSeconds:90,killsPerBank:20,foodRestockSeconds:8,allowBlackKnight:false};
+export const defaults={attack:1,strength:1,defense:1,hitpoints:10,attackBonus:0,strengthBonus:0,defenseBonus:0,damageBonus:0,cooldown:6,enemyCooldown:6,foodHeal:0,foodCount:0,useFoodEconomy:true,foodId:"trout",foodRecoveryBonus:0,foodCooldownSeconds:0,foodSupplySeconds:0,eatActionSeconds:0,foodCooldownMode:"unattended",regenPerSecond:0,searchSeconds:0,respawnDelaySeconds:4.5,bankSeconds:90,killsPerBank:20,foodRestockSeconds:8,allowBlackKnight:false};
