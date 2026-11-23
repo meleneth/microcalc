@@ -53,3 +53,19 @@ A multi-level Strength action is repriced at each intermediate level and may
 switch training monsters as soon as another target becomes economical.
 The UI displays these cost categories alongside route steps so assumptions
 can be checked against observations.
+
+## Food economics in route scoring
+
+Each fight predicts food consumed from expected incoming damage and the
+effective heal per item. The search includes expected acquisition and cooking
+time in the per-kill cycle, so food-heavy encounters lose time against cheaper
+ones even when their raw combat XP/hour is higher. Multi-level training actions
+aggregate food use after repricing each intermediate level; gear-drop farming
+also accumulates estimated food consumption. The result displays food type
+totals, expected units eaten, and food preparation hours by action and route.
+
+Food counts are fractional long-run expectations, not a guarantee about
+inventory usage. Gathering and purchase timings remain provisional. Food
+preparation time is already part of the route total and must not be added a
+second time. Exact cooldown-limited survival and food inventory batch trips
+require discrete-event simulation.
