@@ -142,13 +142,23 @@ function trainingOptions(state,opts){
   const best=fights[0];
   const actions=[];
   if(best)for(const skill of COMBAT){
-    const target=nextMilestone(skill,state[skill],opts.maxLevel);
-    if(target===null)continue;
-    const amount=xp[target-1]-xp[state[skill]-1];
-    const kills=Math.ceil(amount/best.xpPerKill);
-    actions.push({skill,to:target,seconds:kills*best.cycle,
-      detail:`Train ${skill} ${state[skill]}→${target} on ${best.mob.name} (${kills} kills, ${best.food} food${best.potion?", strength potion":""})`,
-      meta:{monster:best.mob.name,kills,food:best.food,potion:best.potion?.name??null,xp:amount,maxHit:best.maxHit,xpPerHour:best.xpPerHour}});
+    const immediate=nextMilestone(skill,state[skill],opts.maxLevel);
+    if(immediate===null)continue;
+    // Competing actions: one level now, or buy a whole damage breakpoint.
+    // The breakpoint target is based on effective equipped Strength, not raw level.
+    const strengthBonus=bestEquipped(state).bonuses.strength;
+    const untilBreakpoint=6-((state.strength+strengthBonus)%6);
+    const breakpoint=skill==="strength"
+      ?Math.min(opts.maxLevel,state.strength+untilBreakpoint):null;
+    const targets=[...new Set([immediate,breakpoint].filter(x=>x!==null && x>state[skill]))];
+    for(const target of targets){
+      const amount=xp[target-1]-xp[state[skill]-1];
+      const kills=Math.ceil(amount/best.xpPerKill);
+      actions.push({skill,to:target,seconds:kills*best.cycle,
+        detail:`Train ${skill} ${state[skill]}→${target} on ${best.mob.name} (${kills} kills, ${best.food} food${best.potion?", strength potion":""})`,
+        meta:{monster:best.mob.name,kills,food:best.food,potion:best.potion?.name??null,xp:amount,maxHit:best.maxHit,xpPerHour:best.xpPerHour,
+          milestone:target===breakpoint && target!==immediate?"strength-breakpoint":"level"}}); 
+    }
   }
   for(const skill of ["fishing","cooking","herblaw"]){
     const target=nextMilestone(skill,state[skill],opts.maxLevel);
