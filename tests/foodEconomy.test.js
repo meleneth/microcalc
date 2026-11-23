@@ -27,3 +27,13 @@ test("eating cooldown and food acquisition can dominate the farming cycle",()=>{
 test("healing is bounded by HP capacity",()=>{
  assert.equal(foodEconomy({foodId:"lobster",maxHp:10,expectedDamagePerKill:5,foodCount:10,foodCooldownSeconds:0,supplySecondsPerFood:0}).heal,10);
 });
+
+test("unattended trout restores seven HP without charging eating cooldown",()=>{
+ const p=foodEconomy({foodId:"trout",maxHp:10,expectedDamagePerKill:14,foodCount:10,
+   foodCooldownSeconds:6,supplySecondsPerFood:24,eatActionSeconds:2,mode:"unattended"});
+ assert.equal(p.heal,7);
+ assert.equal(p.foodPerKill,2);
+ assert.equal(p.foodSecondsPerKill,48);
+ assert.equal(p.eatSecondsPerKill,0);
+ assert.equal(p.extraSecondsPerKill,48);
+});
