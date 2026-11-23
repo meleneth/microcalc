@@ -79,7 +79,7 @@ export function evaluate(mob,stats,rules={}) {
   const effectiveFoodNeeded=food?food.foodPerKill:foodNeeded;
   const effectiveFoodHeal=food?food.heal:foodHeal;
   const safe=(stats.hitpoints-expectedDamage)>0 || (effectiveFoodHeal>0 && stats.foodCount>=Math.ceil(effectiveFoodNeeded));
-  const respawnDelay=Math.max(0,stats.respawnDelaySeconds??4.5);
+  const respawnDelay=Math.max(0,stats.respawnDelaySeconds??5);
   const searchDelay=Math.max(0,stats.searchSeconds);
   const bankDelay=Math.max(0,stats.bankSeconds)/Math.max(1,stats.killsPerBank);
   const supplyDelay=food?food.extraSecondsPerKill:Math.max(0,stats.foodRestockSeconds)*foodNeeded;
@@ -115,4 +115,4 @@ export function goldenPath(stats,goal={attack:40,strength:40,defense:40}) {
   const knight=evaluate(mobs.find(m=>m.name==="Black knight"),{...state,allowBlackKnight:true});
   return {steps,state,knight,reachable:targets.every(s=>state[s]>=goal[s]),totalSeconds:steps.reduce((n,s)=>n+s.seconds,0),method:"greedy-estimate"};
 }
-export const defaults={attack:1,strength:1,defense:1,hitpoints:10,attackBonus:0,strengthBonus:0,defenseBonus:0,damageBonus:0,cooldown:6,enemyCooldown:6,foodHeal:0,foodCount:0,useFoodEconomy:true,foodId:"trout",foodRecoveryBonus:0,foodCooldownSeconds:0,foodSupplySeconds:0,eatActionSeconds:0,foodCooldownMode:"unattended",regenPerSecond:0,searchSeconds:0,respawnDelaySeconds:4.5,bankSeconds:90,killsPerBank:20,foodRestockSeconds:8,allowBlackKnight:false};
+export const defaults={attack:1,strength:1,defense:1,hitpoints:10,attackBonus:0,strengthBonus:0,defenseBonus:0,damageBonus:0,cooldown:6,enemyCooldown:6,foodHeal:0,foodCount:0,useFoodEconomy:true,foodId:"trout",foodRecoveryBonus:0,foodCooldownSeconds:0,foodSupplySeconds:0,eatActionSeconds:0,foodCooldownMode:"unattended",regenPerSecond:0,searchSeconds:0,respawnDelaySeconds:5,bankSeconds:90,killsPerBank:20,foodRestockSeconds:8,allowBlackKnight:false};
