@@ -238,19 +238,32 @@ function potionActions(state,opts){
   if(state.potion||state.herblaw<gameConstraints.strengthPotion.level)return [];
   const recipe=gameConstraints.strengthPotion;
   if(!opts.encounterAvailability.includes(recipe.source))return [];
-  if(!Number.isFinite(expectedKillsForDrop(recipe.source,recipe.requiredDrop)))return [];
-  // The ingredient is only available from a modeled monster the player can
-  // actually fight. Supply fights and each 386-second brew are charged by
-  // evaluateMob once continuous use is selected.
+  const count=expectedKillsForDrop(recipe.source,recipe.requiredDrop);
+  if(!Number.isFinite(count))return [];
   const source=mobs.find(m=>m.name===recipe.source);
-  const viable=viableFights(state,opts).some(f=>f.mob.name===source?.name);
-  if(!viable)return [];
+  // A real combat prerequisite: explicitly farm a source monster before the
+  // potion is available. Never unlock a herb from a merely hypothetical drop.
+  const fights=viableFights(state,opts).filter(f=>f.mob.name===source?.name)
+    .sort((a,b)=>a.cycle-b.cycle);
+  if(!fights.length)return [];
+  const fight=fights[0];
+  const seconds=count*fight.cycle+recipe.craftSeconds;
+  const expectedFood=count*(fight.foodEconomy?.foodPerKill??0);
+  const foodSupplySeconds=count*(fight.foodEconomy?.foodSecondsPerKill??0);
   return [{
-    potion:"strength",seconds:0.001,
-    detail:"Maintain Strength potion continuously (farm Bear for limpwurt roots, mix every dose)",
+    potion:"strength",seconds,
+    detail:"Farm "+recipe.requiredDrop+" from "+recipe.source+
+      " (~"+Math.ceil(count)+" kills), mix Strength potion ("+recipe.craftSeconds+"s)",
     meta:{potionUnlock:true,source:recipe.source,ingredient:recipe.requiredDrop,
+      expectedKills:count,expectedFood,expectedPotions:1,
+      foodTotals:fight.food==="none"?{}:{[fight.food]:expectedFood},
+      foodSupplySeconds,potionSupplySeconds:recipe.craftSeconds,
       mixingSecondsPerDose:recipe.craftSeconds,
-      note:"Modeled supply and mixing time are charged on every subsequent encounter."}
+      timeBreakdown:{combat:count*fight.timeBreakdown.combat,
+        respawn:count*fight.timeBreakdown.respawn,
+        search:count*fight.timeBreakdown.search,
+        banking:count*fight.timeBreakdown.banking,
+        supplies:count*fight.timeBreakdown.supplies+recipe.craftSeconds}}
   }];
 }
 function gearActions(state,opts){
