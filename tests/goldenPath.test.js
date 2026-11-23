@@ -58,3 +58,20 @@ test("route step cumulative times are monotone and exact",()=>{
   assert.ok(Math.abs(elapsed-step.cumulativeSeconds)<1e-7);
  }
 });
+
+test("food consumption is accounted for in route and time score",()=>{
+ const r=solveGoldenPath({maxStates:110,maxLevel:15,minimumKnightKillsPerHour:999});
+ const expected=r.steps.reduce((sum,step)=>sum+(step.meta?.expectedFood??0),0);
+ const supply=r.steps.reduce((sum,step)=>sum+(step.meta?.foodSupplySeconds??0),0);
+ assert.ok(Math.abs(r.totalExpectedFood-expected)<1e-8);
+ assert.ok(Math.abs(r.totalFoodSupplySeconds-supply)<1e-8);
+ assert.ok(r.totalExpectedFood>=0 && r.totalFoodSupplySeconds>=0);
+ for(const step of r.steps){
+  if(!step.meta?.timeBreakdown)continue;
+  const accounted=Object.values(step.meta.timeBreakdown).reduce((sum,n)=>sum+n,0);
+  assert.ok(Math.abs(accounted-step.seconds)<1e-6);
+  assert.ok((step.meta.foodSupplySeconds??0)<=step.meta.timeBreakdown.supplies+1e-7);
+ }
+ const byFood=Object.values(r.foodTotals).reduce((sum,n)=>sum+n,0);
+ assert.ok(Math.abs(byFood-r.totalExpectedFood)<1e-7);
+});
