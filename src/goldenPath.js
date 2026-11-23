@@ -17,7 +17,7 @@ const defaultOptions={
   maxStates:30000,
   maxSeconds:3600*24*30,
   maxLevel:45,
-  encounterAvailability:["Island rodent","Mouse","Chicken","Giant rat","Cow","Goblin",
+  encounterAvailability:["Mouse","Chicken","Giant rat","Cow","Goblin",
     "Insect swarm","Titan scorpion","Snake","Monk","Skeleton","Cave slime","Bear",
     "Ghost","Fire dwarf","Mummy"],
   // These are estimates/settings, not verified wiki progression times.
@@ -116,12 +116,13 @@ function evaluateMob(state,mob,opts,food){
   const sustainable=food?result.foodNeeded<=opts.maxFoodPerKill:result.expectedDamage<=0;
   return {...result,safe:result.safe&&sustainable,food:food?.id??"none",potion};
 }
+const allowedEncounter=mob=>mob?.location!=="Tutabay Atoll";
 function viableFights(state,opts){
   const choices=[null,...foodChoices(state,opts)];
   const results=[];
   for(const name of opts.encounterAvailability){
     const mob=mobs.find(m=>m.name===name);
-    if(!mob || name==="Imp" || name==="Turkey" || name.includes("Safe"))continue;
+    if(!allowedEncounter(mob) || name==="Imp" || name==="Turkey" || name.includes("Safe"))continue;
     for(const food of choices){
       const r=evaluateMob(state,mob,opts,food);
       if(r.safe&&Number.isFinite(r.cycle)&&r.cycle>0)
@@ -277,7 +278,7 @@ function gearActions(state,opts){
       table.drops.some(d=>d.item.toLowerCase()===gear.name));
     for(const [name] of sources){
       const monster=mobs.find(m=>m.name===name);
-      if(!monster)continue;
+      if(!allowedEncounter(monster))continue;
       const choices=viableFights(state,opts).filter(x=>x.mob.name===name).sort((a,b)=>a.cycle-b.cycle);
       if(!choices.length)continue;
       const kills=expectedKillsForDrop(name,gear.name);
