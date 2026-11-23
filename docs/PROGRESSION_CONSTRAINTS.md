@@ -23,3 +23,7 @@ Not complete:
 - Combat engine still uses provisional accuracy and enemy hit formulas. Ranked loadouts remain estimates.
 
 Do not present these dependency helpers as a proven golden-path solver.
+
+## Energy assumption (user-confirmed 2026-11-23)
+
+Energy is always full for the user's intended progression route. Do not model energy consumption, regeneration, resting, or energy-driven scheduling as constraints or costs. Optimize real elapsed time (combat, respawns, supply gathering, crafting, travel, banking, and item drops) instead. Treat energy as nonbinding even for Fishing, Cooking, and Herblaw.
