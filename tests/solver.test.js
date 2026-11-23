@@ -14,3 +14,14 @@ test("max hit crosses every six effective Strength",()=>{
   assert.equal(meleeMaxHit(13,1),4);
   assert.equal(evaluate(mobs.find(m=>m.name==="Cow"),{...defaults,strength:11,strengthBonus:2}).maxHit,3);
 });
+
+test("between-monster delay is separate from loot search and banking",()=>{
+ const mob=mobs.find(m=>m.name==="Cow");
+ const base={...defaults,foodHeal:10,foodCount:20,bankSeconds:0,searchSeconds:0,foodRestockSeconds:0,respawnDelaySeconds:0};
+ const fast=evaluate(mob,base);
+ const slow=evaluate(mob,{...base,respawnDelaySeconds:6});
+ assert.equal(slow.cycle-fast.cycle,6);
+ assert.ok(slow.xpPerHour<fast.xpPerHour);
+ assert.equal(slow.searchDelay,0);
+ assert.equal(evaluate(mob,{...base,searchSeconds:3}).cycle-fast.cycle,3);
+});
