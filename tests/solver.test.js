@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { xpRemaining, levelAt, evaluate, goldenPath, defaults, meleeMaxHit, combatXpForHit, combatXpForSoloKill } from "../src/solver.js";
+import { xpRemaining, levelAt, evaluate, goldenPath, defaults, meleeMaxHit, expectedAttacksToKill, combatXpForHit, combatXpForSoloKill } from "../src/solver.js";
 import { mobs, xp } from "../src/data.js";
 test("wiki XP thresholds",()=>{assert.equal(xp.length,99);assert.equal(xp[98],130344310);assert.equal(levelAt(830),2);assert.equal(xpRemaining(0,40),372240);});
 test("Black knight wiki stats",()=>{const k=mobs.find(x=>x.name==="Black knight");assert.deepEqual([k.hp,k.attack,k.strength,k.defense],[38,30,41,42]);});
@@ -56,4 +56,21 @@ test("itemized supply and eating delay affect farming rates",()=>{
  assert.ok(costly.cycle>quick.cycle);
  assert.ok(costly.xpPerHour<quick.xpPerHour);
  assert.equal(costly.xpPerKill,16);
+});
+
+test("expected attack count respects finite hitpoints and overkill",()=>{
+ assert.equal(expectedAttacksToKill(3,1,0.5),6);
+ assert.equal(expectedAttacksToKill(3,3,1),1+((1+2/3)+(1+1/3))/3);
+ assert.ok(expectedAttacksToKill(3,6,1)<expectedAttacksToKill(3,3,1));
+ assert.ok(expectedAttacksToKill(3,60,1)>1);
+ assert.throws(()=>expectedAttacksToKill(3,0,1));
+});
+test("cycle timing decomposes and every extra respawn second is charged per kill",()=>{
+ const rat=mobs.find(m=>m.name==="Giant rat");
+ const stats={...defaults,useFoodEconomy:true,foodId:"shrimp",foodCount:30};
+ const quick=evaluate(rat,{...stats,respawnDelaySeconds:3});
+ const slow=evaluate(rat,{...stats,respawnDelaySeconds:6});
+ assert.ok(Math.abs(slow.cycle-quick.cycle-3)<1e-9);
+ assert.ok(Math.abs(Object.values(slow.timeBreakdown).filter((_,i)=>i<5).reduce((a,b)=>a+b,0)-slow.cycle)<1e-9);
+ assert.equal(slow.timeBreakdown.respawn,6);
 });
