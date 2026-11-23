@@ -1,12 +1,11 @@
 import { findFood, nominalHeal, healingFromBite } from "./foods.js";
 import { lootTables } from "./lootTables.js";
-import { meleeMaxHit } from "./solver.js";
 
 // Provenance: in-game player mechanic is +1 max hit per six Strength.
 // Enemy use of the same formula remains a hypothesis.
 export function estimatedEnemyMaxHit(monster) {
   if(!monster || !Number.isFinite(monster.strength))throw new RangeError("Monster Strength required");
-  return meleeMaxHit(monster.strength);
+  return Math.max(1,1+Math.floor(Math.max(0,monster.strength)/6));
 }
 
 // Time to gather one unit of an ingredient, including kills and per-kill downtime.
