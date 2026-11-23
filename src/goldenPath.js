@@ -3,6 +3,7 @@ import { earlyGear } from "./earlyGear.js";
 import { lootTables, expectedKillsForDrop } from "./lootTables.js";
 import { foods } from "./foods.js";
 import { evaluate, defaults, meleeMaxHit } from "./solver.js";
+import { gameConstraints } from "./progression.js";
 
 // Search actions are *milestones* rather than individual XP ticks.
 // This is a bounded uniform-cost search over explicit, priced transitions.
@@ -38,8 +39,8 @@ const toKey=s=>SKILLS.map(k=>s[k]).join(":")+"|"+s.gear.join(",");
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const nextMilestone=(skill,v,limit)=>{
   if(v>=limit)return null;
-  const fixed=skill==="attack"||skill==="defense"?[5,10,15,20,25,30,35,40,45]:
-    skill==="strength"?[6,12,18,24,30,36,42,45]:
+  const fixed=skill==="attack"||skill==="defense"?[v+1]:
+    skill==="strength"?[v+1,6,12,18,24,30,36,42,48,54,60,66,72,78,84,90,96].filter(x=>x>v).sort((a,b)=>a-b):
     skill==="fishing"?[5,10,15,20,25,30,40]:
     skill==="cooking"?[5,10,15,20,25,40]:
     [2,4,10,13,20,30];
@@ -83,11 +84,30 @@ function combatStats(state,optionFood,options){
 }
 function evaluateMob(state,mob,opts,food){
   const stats=combatStats(state,food,opts);
-  const result=evaluate(mob,stats);
-  // Without food, nonzero expected damage drains HP across long trips.
+  const base=evaluate(mob,stats);
+  // Potion use is a *recurring* cost, never a permanent free strength bonus.
+  // Estimate a dose from 32 expected Bear kills + verified 386s brewing.
+  // No potion is considered until Herblaw 13 and Bear farming is viable.
+  const root=gameConstraints.strengthPotion;
+  let result=base, potion=null;
+  if(state.herblaw>=root.level && mob.name!=="Bear"){
+    const bear=mobs.find(x=>x.name==="Bear");
+    const bearFight=evaluate(bear,stats);
+    if(bearFight.safe && (!food || bearFight.foodNeeded<=opts.maxFoodPerKill)){
+      const supplySeconds=32*bearFight.cycle+root.craftSeconds;
+      const boosted=evaluate(mob,{...stats,strengthBonus:stats.strengthBonus+root.boost});
+      const totalSeconds=boosted.cycle*(1+supplySeconds/root.durationSeconds);
+      const boostedRate=3600/totalSeconds;
+      if(boosted.safe && boostedRate>base.killsPerHour && (!food || boosted.foodNeeded<=opts.maxFoodPerKill)){
+        result={...boosted,cycle:totalSeconds,killsPerHour:boostedRate,
+          xpPerHour:boostedRate*boosted.xpPerKill};
+        potion={name:"strength potion",strengthBonus:root.boost,
+          supplySecondsPerDose:supplySeconds,durationSeconds:root.durationSeconds};
+      }
+    }
+  }
   const sustainable=food?result.foodNeeded<=opts.maxFoodPerKill:true;
-  const safe=result.safe&&sustainable;
-  return {...result,safe,food:food?.id??"none"};
+  return {...result,safe:result.safe&&sustainable,food:food?.id??"none",potion};
 }
 function viableFights(state,opts){
   const choices=[null,...foodChoices(state,opts)];
@@ -127,8 +147,8 @@ function trainingOptions(state,opts){
     const amount=xp[target-1]-xp[state[skill]-1];
     const kills=Math.ceil(amount/best.xpPerKill);
     actions.push({skill,to:target,seconds:kills*best.cycle,
-      detail:`Train ${skill} ${state[skill]}→${target} on ${best.mob.name} (${kills} kills, ${best.food} food)`,
-      meta:{monster:best.mob.name,kills,food:best.food,xp:amount}});
+      detail:`Train ${skill} ${state[skill]}→${target} on ${best.mob.name} (${kills} kills, ${best.food} food${best.potion?", strength potion":""})`,
+      meta:{monster:best.mob.name,kills,food:best.food,potion:best.potion?.name??null,xp:amount,maxHit:best.maxHit,xpPerHour:best.xpPerHour}});
   }
   for(const skill of ["fishing","cooking","herblaw"]){
     const target=nextMilestone(skill,state[skill],opts.maxLevel);
@@ -176,7 +196,7 @@ class Heap{
   pop(){const a=this.a;if(!a.length)return null;const root=a[0],last=a.pop();if(!a.length)return root;let i=0;while(2*i+1<a.length){let c=2*i+1;if(c+1<a.length&&a[c+1].cost<a[c].cost)c++;if(a[c].cost>=last.cost)break;a[i]=a[c];i=c;}a[i]=last;return root;}
   get size(){return this.a.length;}
 }
-export function solveGoldenPath(userOptions={}){
+export function* solveGoldenPathProgress(userOptions={}){
   const opts={...defaultOptions,...userOptions};
   for(const v of ["maxStates","maxLevel","minimumKnightKillsPerHour","maxFoodPerKill"])
     if(!Number.isFinite(opts[v])||opts[v]<=0)throw new RangeError(`Invalid ${v}`);
@@ -190,6 +210,12 @@ export function solveGoldenPath(userOptions={}){
     const node=heap.pop();if(node.cost!==dist.get(node.key))continue;
     const current=nodes.get(node.key),state=current.state;expanded++;
     const status=knightAssessment(state,opts);
+    if(expanded===1 || expanded%25===0)yield {type:"progress",phase:"search",
+      expanded,queued:heap.size,visited:dist.size,limit:opts.maxStates,
+      bestKnightRate:closest?.status.best?.killsPerHour??0,
+      currentLevels:{attack:state.attack,strength:state.strength,defense:state.defense,
+        fishing:state.fishing,cooking:state.cooking,herblaw:state.herblaw},
+      elapsedRouteSeconds:node.cost};
     if(status.ready){best={key:node.key,state,status,cost:node.cost};break;}
     if(!closest || (status.best?.killsPerHour??0)>(closest.status.best?.killsPerHour??0))
       closest={key:node.key,state,status,cost:node.cost};
@@ -205,6 +231,7 @@ export function solveGoldenPath(userOptions={}){
       dist.set(key,cost);nodes.set(key,{state:next,parent:node.key,action});heap.push({key,cost});
     }
   }
+  yield {type:"progress",phase:"route",expanded,visited:dist.size,limit:opts.maxStates};
   const found=best??closest;
   const steps=[];
   if(found){
@@ -226,4 +253,12 @@ export function solveGoldenPath(userOptions={}){
     reason:best?"Found minimum time within available transitions and search budget":
       "No qualifying Black Knight state found within budget. Partial path only; do not call it a golden path."
   };
+}
+
+// Synchronous API retained for tests and other non-UI consumers.
+export function solveGoldenPath(options={}){
+  const search=solveGoldenPathProgress(options);
+  let item=search.next();
+  while(!item.done)item=search.next();
+  return item.value;
 }
