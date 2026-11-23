@@ -69,3 +69,24 @@ inventory usage. Gathering and purchase timings remain provisional. Food
 preparation time is already part of the route total and must not be added a
 second time. Exact cooldown-limited survival and food inventory batch trips
 require discrete-event simulation.
+
+## Equipment and potion loadouts
+
+The search now has a larger default budget of 30,000 explored states (the
+browser button uses the same limit). Search actions remain granular, but
+the report merges adjacent levels of the same skill into one job without
+changing time, food consumption or monster transitions. Gear changes are
+displayed as explicit equip/unequip events only after owned gear meets its
+requirements. The acquisition costs are charged by the preceding farming job.
+
+The currently documented Strength potion is a *persistent* loadout once
+selected. Unlocking it requires Herblaw level 13 and a viable, actual Bear
+farming action for the documented 1/32 limpwurt root drop, followed by the
+first 386-second mixing action. Maintaining its effect afterward incurs an
+estimated recurring root-farming and 386-second mixing cost per 60-minute
+dose, incorporated into combat action time. The expected potion counts
+may be fractional in the long-run estimate. No additional potions are
+invented without documented ingredient drops and their sourcing actions.
+
+This remains an expected-cost model: potion timing is amortized, not a
+frame-by-frame simulation of inventory, dose expiry, or travel.
