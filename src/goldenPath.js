@@ -150,6 +150,8 @@ function knightAssessment(state,opts){
 // using only the initial level's speed.
 function priceTraining(state,skill,target,opts){
   const segments=[];let seconds=0,kills=0,totalXp=0;
+  const foodTotals={};
+  let expectedFood=0,foodSupplySeconds=0;
   const timeBreakdown={combat:0,respawn:0,search:0,banking:0,supplies:0};
   for(let current=state[skill];current<target;current++){
     const intermediate={...state,[skill]:current};
@@ -160,16 +162,25 @@ function priceTraining(state,skill,target,opts){
     const duration=n*fight.cycle;
     if(!Number.isFinite(duration)||duration<=0)return null;
     seconds+=duration;kills+=n;totalXp+=amount;
+    const eaten=n*(fight.foodEconomy?.foodPerKill??0);
+    const acquiredSeconds=n*(fight.foodEconomy?.foodSecondsPerKill??0);
+    if(fight.food!=="none"){
+      foodTotals[fight.food]=(foodTotals[fight.food]??0)+eaten;
+      expectedFood+=eaten;
+      foodSupplySeconds+=acquiredSeconds;
+    }
     for(const key of Object.keys(timeBreakdown))
       timeBreakdown[key]+=n*(fight.timeBreakdown?.[key]??0);
     const previous=segments.at(-1);
     if(previous&&previous.monster===fight.mob.name&&previous.food===fight.food&&
       previous.potion===(fight.potion?.name??null)){
       previous.to=current+1;previous.kills+=n;previous.seconds+=duration;
+      previous.expectedFood+=eaten;previous.foodSupplySeconds+=acquiredSeconds;
     }else segments.push({from:current,to:current+1,monster:fight.mob.name,
-      food:fight.food,potion:fight.potion?.name??null,kills:n,seconds:duration});
+      food:fight.food,potion:fight.potion?.name??null,kills:n,seconds:duration,
+      expectedFood:eaten,foodSupplySeconds:acquiredSeconds});
   }
-  return {seconds,kills,totalXp,segments,timeBreakdown};
+  return {seconds,kills,totalXp,segments,timeBreakdown,expectedFood,foodTotals,foodSupplySeconds};
 }
 function trainingOptions(state,opts){
   const actions=[];
@@ -191,7 +202,9 @@ function trainingOptions(state,opts){
         meta:{kills:priced.kills,xp:priced.totalXp,
           milestone:skill==="strength"&&target===breakpoint&&target!==immediate?
             "strength-breakpoint":"level",
-          segments:priced.segments,timeBreakdown:priced.timeBreakdown}});
+          segments:priced.segments,timeBreakdown:priced.timeBreakdown,
+          expectedFood:priced.expectedFood,foodTotals:priced.foodTotals,
+          foodSupplySeconds:priced.foodSupplySeconds}});
     }
   }
   for(const skill of ["fishing","cooking","herblaw"]){
@@ -226,10 +239,16 @@ function gearActions(state,opts){
       const choices=viableFights(state,opts).filter(x=>x.mob.name===name).sort((a,b)=>a.cycle-b.cycle);
       if(!choices.length)continue;
       const kills=expectedKillsForDrop(name,gear.name);
-      const seconds=kills*choices[0].cycle;
+      const fight=choices[0];
+      const seconds=kills*fight.cycle;
+      const expectedFood=kills*(fight.foodEconomy?.foodPerKill??0);
+      const foodSupplySeconds=kills*(fight.foodEconomy?.foodSecondsPerKill??0);
       result.push({gear:gear.name,seconds,
         detail:`Farm ${gear.name} from ${name} (~${Math.ceil(kills)} expected kills)`,
-        meta:{monster:name,expectedKills:kills,food:choices[0].food}});
+        meta:{monster:name,expectedKills:kills,food:fight.food,expectedFood,
+          foodTotals:fight.food==="none"?{}:{[fight.food]:expectedFood},foodSupplySeconds,
+          timeBreakdown:Object.fromEntries(Object.entries(fight.timeBreakdown)
+            .filter(([key])=>key!=="total").map(([key,value])=>[key,value*kills]))}});
     }
   }
   return result;
@@ -290,8 +309,11 @@ function reconstruct(entry,nodes){
     steps.push({...n.action,stateAfter:n.state});
     key=n.parent;
   }
-  steps.reverse();let elapsed=0;
-  return steps.map(step=>({...step,cumulativeSeconds:elapsed+=step.seconds}));
+  steps.reverse();let elapsed=0,cumulativeFood=0;
+  return steps.map(step=>({
+    ...step,cumulativeSeconds:elapsed+=step.seconds,
+    cumulativeExpectedFood:cumulativeFood+=step.meta?.expectedFood??0
+  }));
 }
 export function* solveGoldenPathProgress(userOptions={}){
   const opts={...defaultOptions,...userOptions};
@@ -388,6 +410,13 @@ export function* solveGoldenPathProgress(userOptions={}){
       energy:"nonbinding",gear:"drop-sourced only"},
     start:initial,final:found?.state??initial,
     totalSeconds:found?.cost??0,steps,
+    totalExpectedFood:steps.reduce((sum,step)=>sum+(step.meta?.expectedFood??0),0),
+    totalFoodSupplySeconds:steps.reduce((sum,step)=>sum+(step.meta?.foodSupplySeconds??0),0),
+    foodTotals:steps.reduce((totals,step)=>{
+      for(const [id,quantity] of Object.entries(step.meta?.foodTotals??{}))
+        totals[id]=(totals[id]??0)+quantity;
+      return totals;
+    },{}),
     knight:found?.status??knightAssessment(initial,opts),
     reason:incumbent?"Feasible modeled route found; shortest route not proven.":
       exhausted?"Search frontier exhausted under the current action model; no feasible route found.":
