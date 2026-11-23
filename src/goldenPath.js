@@ -106,7 +106,7 @@ function evaluateMob(state,mob,opts,food){
       }
     }
   }
-  const sustainable=food?result.foodNeeded<=opts.maxFoodPerKill:true;
+  const sustainable=food?result.foodNeeded<=opts.maxFoodPerKill:result.expectedDamage<=0;
   return {...result,safe:result.safe&&sustainable,food:food?.id??"none",potion};
 }
 function viableFights(state,opts){
