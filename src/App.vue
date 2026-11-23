@@ -8,6 +8,7 @@ const result=ref(null);
 const error=ref("");
 let worker=null;
 const fmt=n=>Number.isFinite(n)?Math.round(n).toLocaleString():"—";
+const foodCount=n=>Number.isFinite(n)?n.toFixed(1):"—";
 const hours=s=>Number.isFinite(s)?(s/3600).toFixed(2):"—";
 const percent=computed(()=>progress.value?.phase==="route"?100:
   Math.min(99,Math.round(100*(progress.value?.expanded??0)/maxStates)));
@@ -57,11 +58,12 @@ onUnmounted(()=>worker?.terminate());
           <p class="summary">{{result.success?'Feasible modeled Black Knight route found':'No feasible route found within search budget'}}</p>
           <div class="metrics">
             <div><small>Estimated hours</small><strong>{{hours(result.totalSeconds)}}</strong></div>
-            <div><small>Actions</small><strong>{{result.steps.length}}</strong></div>
+            <div><small>Expected food eaten</small><strong>{{foodCount(result.totalExpectedFood)}}</strong></div>
             <div><small>Evaluated states</small><strong>{{fmt(result.expanded)}}</strong></div>
             <div><small>Knight kills/hr</small><strong>{{(result.knight.best?.killsPerHour??0).toFixed(1)}}</strong></div>
           </div>
           <p :class="result.success?'note':'warning'">{{result.reason}}</p>
+          <p class="note">Food totals: {{Object.entries(result.foodTotals??{}).map(([id,n])=>id+' '+foodCount(n)).join(' · ')||'none'}}. Preparation and gathering {{hours(result.totalFoodSupplySeconds)}}h, already included in the route time. Fractions represent expected consumption.</p>
           <p class="note">Each combat training step uses the best modeled XP/hour fight available at that state. Combat XP credits 2× actual monster HP removed; food preparation, respawn, banking, and potion supply are included as estimated costs. Unverified game mechanics remain estimates.</p>
         </section>
         <section class="panel">
@@ -74,12 +76,14 @@ onUnmounted(()=>worker?.terminate());
                 Between kills {{hours(step.meta.timeBreakdown.respawn)}}h ·
                 Search {{hours(step.meta.timeBreakdown.search)}}h ·
                 Banking {{hours(step.meta.timeBreakdown.banking)}}h ·
-                Food &amp; potions {{hours(step.meta.timeBreakdown.supplies)}}h
+                Food &amp; potions {{hours(step.meta.timeBreakdown.supplies)}}h ·
+                Expected food {{foodCount(step.meta.expectedFood??0)}} ·
+                Food preparation {{hours(step.meta.foodSupplySeconds??0)}}h
               </div>
               <div v-if="step.meta?.segments?.length>1" class="note">
                 {{step.meta.segments.map(x=>x.monster+' ('+x.from+'→'+x.to+')').join(' · ')}}
               </div>
-              </td><td>{{hours(step.seconds)}}</td><td>{{hours(step.cumulativeSeconds)}}</td>
+              </td><td>{{hours(step.seconds)}}</td><td>{{hours(step.cumulativeSeconds)}}<div class="note">{{foodCount(step.cumulativeExpectedFood??0)}} food eaten</div></td>
             </tr></tbody></table></div>
           <p v-if="!result.steps.length" class="note">The search found no supported progression action on the selected route.</p>
         </section>
