@@ -50,10 +50,21 @@ const inputs=[
      <div class="table-wrap"><table><thead><tr><th>Target</th><th>XP/hr</th><th>Kills/hr</th><th>Damage</th></tr></thead><tbody><tr v-for="r in store.candidates.slice(0,12)" :key="r.mob.name"><td>{{r.mob.name}}</td><td>{{fmt(r.xpPerHour)}}</td><td>{{r.killsPerHour.toFixed(1)}}</td><td>{{r.expectedDamage.toFixed(1)}}</td></tr></tbody></table></div>
      <p v-if="!store.candidates.length" class="warning">No encounter passes the current expected-survival filter. Improve defence, hitpoints, or food.</p>
     </section>
-    <section class="panel"><div class="section-head"><h2>04 / Golden-path candidate</h2><label class="goal">All combat levels to <input type="number" min="1" max="99" v-model.number="store.goal"/></label></div>
-     <p class="note">Deterministic greedy baseline, not a proven global optimum. Each step picks the best currently viable estimated XP/hour target and trains the lowest combat skill.</p>
-     <p class="summary">{{store.plan.reachable?"Estimated training time: "+hours(store.plan.totalSeconds)+" hours":"Unable to reach target under current rules"}}</p>
-     <div class="table-wrap"><table><thead><tr><th>Mob</th><th>Skill</th><th>Levels</th><th>Kills</th><th>Hours</th></tr></thead><tbody><tr v-for="(step,i) in store.plan.steps" :key="i"><td>{{step.mob}}</td><td>{{step.skill}}</td><td>{{step.from}} → {{step.to}}</td><td>{{fmt(step.kills)}}</td><td>{{hours(step.seconds)}}</td></tr></tbody></table></div>
+    <section class="panel"><div class="section-head"><h2>04 / Level-one route search</h2><span class="tag">BOUNDED DIJKSTRA</span></div>
+     <p class="note">Starts from level 1 in Attack, Strength, Defence, Fishing, Cooking and Herblaw. Considers time-to-level, equipment drop farming, food costs and Black Knight viability. Your current character stats do not influence this search.</p>
+     <label class="goal">Search budget (states) <input type="number" min="100" max="20000" step="100" v-model.number="store.searchBudget"/></label>
+     <p class="summary">{{store.plan.success?"Candidate route found":"Partial route, no verified goal reached"}} · {{hours(store.plan.totalSeconds)}} hours · {{fmt(store.plan.expanded)}} explored states</p>
+     <p class="warning" v-if="!store.plan.success">{{store.plan.reason}}</p>
+     <div v-if="store.plan.knight.best" class="metrics">
+       <div><small>Expected Knight kills / hr</small><strong>{{store.plan.knight.best.killsPerHour.toFixed(1)}}</strong></div>
+       <div><small>Food</small><strong>{{store.plan.knight.best.food}}</strong></div>
+       <div><small>Max melee hit</small><strong>{{store.plan.knight.best.maxHit}}</strong></div>
+       <div><small>Search status</small><strong>{{store.plan.success?"READY":"PARTIAL"}}</strong></div>
+     </div>
+     <p class="note">Accuracy, enemy damage, and gathering rates are provisional. Full statistical survival and multiplayer routes still require calibration.</p>
+     <div class="table-wrap"><table><thead><tr><th>Step</th><th>Action</th><th>Estimated hours</th></tr></thead><tbody>
+       <tr v-for="(step,i) in store.plan.steps" :key="i"><td>{{i+1}}</td><td>{{step.detail}}</td><td>{{hours(step.seconds)}}</td></tr>
+     </tbody></table></div>
     </section>
    </main>
   </div>
