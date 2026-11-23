@@ -72,7 +72,7 @@ require discrete-event simulation.
 
 ## Equipment and potion loadouts
 
-The search now has a larger default budget of 30,000 explored states (the
+The search now has a larger default budget of 100,000 explored states (the
 browser button uses the same limit). Search actions remain granular, but
 the report merges adjacent levels of the same skill into one job without
 changing time, food consumption or monster transitions. Gear changes are
