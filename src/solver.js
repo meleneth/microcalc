@@ -36,10 +36,12 @@ export function evaluate(mob,stats,rules={}) {
   const foodHeal=Math.max(0,stats.foodHeal);
   const foodNeeded=Math.max(0,expectedDamage-stats.regenPerSecond*ttk)/(foodHeal||Infinity);
   const safe=(stats.hitpoints-expectedDamage)>0 || (foodHeal>0 && stats.foodCount>=Math.ceil(foodNeeded));
-  const cycle=ttk+Math.max(0,stats.searchSeconds)+Math.max(0,stats.bankSeconds)/Math.max(1,stats.killsPerBank)
+  const respawnDelay=Math.max(0,stats.respawnDelaySeconds??4.5);
+  const searchDelay=Math.max(0,stats.searchSeconds);
+  const cycle=ttk+respawnDelay+searchDelay+Math.max(0,stats.bankSeconds)/Math.max(1,stats.killsPerBank)
     +Math.max(0,stats.foodRestockSeconds)*foodNeeded;
   const xpPerKill=mob.hp*stats.xpPerDamage; // explicitly adjustable assumption, not confirmed game mechanic
-  return {mob,ttk,enemyDps,expectedDamage,foodNeeded,safe,maxHit,pHit,xpPerKill,xpPerHour:xpPerKill*3600/cycle,killsPerHour:3600/cycle,cycle};
+  return {mob,ttk,respawnDelay,searchDelay,enemyDps,expectedDamage,foodNeeded,safe,maxHit,pHit,xpPerKill,xpPerHour:xpPerKill*3600/cycle,killsPerHour:3600/cycle,cycle};
 }
 export function rankTargets(stats) {
   return mobs.map(m=>evaluate(m,stats))
@@ -67,4 +69,4 @@ export function goldenPath(stats,goal={attack:40,strength:40,defense:40}) {
   const knight=evaluate(mobs.find(m=>m.name==="Black knight"),{...state,allowBlackKnight:true});
   return {steps,state,knight,reachable:targets.every(s=>state[s]>=goal[s]),totalSeconds:steps.reduce((n,s)=>n+s.seconds,0),method:"greedy-estimate"};
 }
-export const defaults={attack:1,strength:1,defense:1,hitpoints:10,attackBonus:0,strengthBonus:0,defenseBonus:0,damageBonus:0,cooldown:6,enemyCooldown:6,foodHeal:0,foodCount:0,regenPerSecond:0,searchSeconds:5,bankSeconds:90,killsPerBank:20,foodRestockSeconds:8,xpPerDamage:4,allowBlackKnight:false};
+export const defaults={attack:1,strength:1,defense:1,hitpoints:10,attackBonus:0,strengthBonus:0,defenseBonus:0,damageBonus:0,cooldown:6,enemyCooldown:6,foodHeal:0,foodCount:0,regenPerSecond:0,searchSeconds:0,respawnDelaySeconds:4.5,bankSeconds:90,killsPerBank:20,foodRestockSeconds:8,xpPerDamage:4,allowBlackKnight:false};
