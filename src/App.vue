@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onUnmounted } from "vue";
 import { sources } from "./data.js";
-const maxStates=30000;
+const maxStates=100000;
 const status=ref("idle");
 const progress=ref(null);
 const result=ref(null);
