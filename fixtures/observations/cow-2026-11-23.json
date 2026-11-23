@@ -35,7 +35,8 @@
     "The +5 in the Attack bonuses row is visually distinct from the +2 equipment value.",
     "Hit and dodge percentages are UI output for this encounter, not raw combat trials.",
     "No enemy stats are independently asserted by this fixture.",
-    "The second 77% observation was reported after removing a +2 Attack sword; other weapon-related effects were not independently checked."
+    "The second 77% observation was reported after removing a +2 Attack sword; other weapon-related effects were not independently checked.",
+    "The 72% hit chance is the user-reported observation after the Attack potion expired; the sword was unequipped in the preceding observation."
   ],
   "evidence": [
     "image(20261123-083310).png",
@@ -51,6 +52,22 @@
       "effectiveAttack": 22,
       "displayedHitChancePercent": 77,
       "setup": "Attack 17 + active potion 5, +2 Attack sword unequipped; assumes potion remained active"
+    },
+    {
+      "effectiveAttack": 17,
+      "displayedHitChancePercent": 72,
+      "setup": "Attack 17, +2 Attack sword removed and +5 Attack potion expired (both presumed absent)"
     }
-  ]
+  ],
+  "xpMechanic": {
+    "xpPerEffectiveDamage": 2,
+    "overkillAwarded": false,
+    "source": "User-reported direct in-game mechanic",
+    "example": {
+      "hpRemaining": 3,
+      "rolledHit": 10,
+      "effectiveDamage": 3,
+      "xpGained": 6
+    }
+  }
 }
