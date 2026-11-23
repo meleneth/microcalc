@@ -1,0 +1,25 @@
+# Progression prerequisites
+
+Current target: sustained ordinary-combat Black Knight farming, with Attack, Strength, Defence, Fishing, Cooking and Herblaw as possible investment skills.
+
+Confirmed user constraints:
+- Vials and raw sardines are purchasable.
+- Turkey is fought with 7 other players (8 total). Fox Hat is required before planning Turkey farming.
+- Imp is fought with one other player (2 total).
+- Lucky Paw from Mouse is a prerequisite for Fox Hat; wiki documents 1/1,024 chance.
+- Bear is an important supplier of Strength-potion materials. Wiki monster loot data lists Limpwurt Root at 1/32.
+
+Implemented in src/progression.js:
+- Explicit prereqs and expected drop kills.
+- Equippable gear options, legal loadout enumeration, DPS and combat estimated comparisons.
+- Group sizing metadata without fictitious group-damage scaling.
+- Potion bottleneck helper with unverified recipe called out.
+
+Not complete:
+- Full multi-skill shortest-path search and unlocking of Fishing/Cooking/Herblaw crafts.
+- Exact potion recipe, effect duration and material use verified from Microscape data.
+- Shared XP, kill participation, loot eligibility and hit rates for multiplayer encounters.
+- Gear acquisition time, affordability, travel, equipment slots and actual full fight survival.
+- Combat engine still uses provisional accuracy and enemy hit formulas. Ranked loadouts remain estimates.
+
+Do not present these dependency helpers as a proven golden-path solver.
