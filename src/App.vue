@@ -40,7 +40,7 @@ onUnmounted(()=>worker?.terminate());
     <main class="solver-view">
       <section v-if="status==='idle'" class="panel"><h2>Ready to explore</h2><p class="note">Two phases: search for the cheapest progression strategy, then reconstruct the recommended route. Starts at level 1 in all six skills, with no assumed free equipment. This is a bounded model, not a guaranteed optimal in-game solution.</p></section>
       <section v-if="status==='running'" class="panel" aria-live="polite">
-        <div class="section-head"><h2>{{progress?.phase==='route'?'Phase 2 / Reconstructing route':'Phase 1 / Exploring progression'}}</h2><span class="tag">RUNNING</span></div>
+        <div class="section-head"><h2>{{progress?.phase==='route'?'Phase 2 / Reconstructing route':progress?.phase==='optimization'?'Phase 2 / Improving the best route':'Phase 1 / Finding a feasible route'}}</h2><span class="tag">RUNNING</span></div>
         <div class="progress-track"><div class="progress-fill" :style="{width:percent+'%'}"></div></div>
         <div class="metrics">
           <div><small>States evaluated</small><strong>{{fmt(progress?.expanded??0)}}</strong></div>
@@ -48,27 +48,27 @@ onUnmounted(()=>worker?.terminate());
           <div><small>Search budget</small><strong>{{fmt(maxStates)}}</strong></div>
           <div><small>Best Knight kills/hr</small><strong>{{(progress?.bestKnightRate??0).toFixed(1)}}</strong></div>
         </div>
-        <p class="note">Searching competing training and unlock routes. The bar indicates the state budget consumed, not a prediction of completion time.</p>
+        <p v-if="progress?.incumbentSeconds!==null&&progress?.incumbentSeconds!==undefined" class="summary">Best feasible route: {{hours(progress.incumbentSeconds)}} hours · {{progress.incumbentSteps?.length??0}} steps</p><p v-if="progress?.nextAction" class="note">Best next action: {{progress.nextAction}}</p><p class="note">{{fmt(progress?.pruned??0)}} dominated or over-budget states pruned. The bar shows the state budget used, not a completion-time prediction.</p>
       </section>
       <section v-if="status==='error'" class="panel"><h2>Solver failed</h2><p class="warning">{{error}}</p><button class="run-button" @click="run">Retry</button></section>
       <template v-if="result">
         <section class="panel">
           <div class="section-head"><h2>Phase 2 / Recommended route</h2><span class="tag">{{result.success?'GOAL REACHED':'PARTIAL RESULT'}}</span></div>
-          <p class="summary">{{result.success?'Candidate Black Knight route found':'No verified goal within search budget'}}</p>
+          <p class="summary">{{result.success?'Feasible modeled Black Knight route found':'No feasible route found within search budget'}}</p>
           <div class="metrics">
             <div><small>Estimated hours</small><strong>{{hours(result.totalSeconds)}}</strong></div>
             <div><small>Actions</small><strong>{{result.steps.length}}</strong></div>
             <div><small>Evaluated states</small><strong>{{fmt(result.expanded)}}</strong></div>
             <div><small>Knight kills/hr</small><strong>{{(result.knight.best?.killsPerHour??0).toFixed(1)}}</strong></div>
           </div>
-          <p v-if="!result.success" class="warning">{{result.reason}}</p>
-          <p class="note">Each step uses the cheapest modeled fight available at that state. Combat XP credits 2× actual monster HP removed; food preparation, respawn, banking, and potion supply are included as estimated costs. Unverified game mechanics remain estimates.</p>
+          <p :class="result.success?'note':'warning'">{{result.reason}}</p>
+          <p class="note">Each combat training step uses the best modeled XP/hour fight available at that state. Combat XP credits 2× actual monster HP removed; food preparation, respawn, banking, and potion supply are included as estimated costs. Unverified game mechanics remain estimates.</p>
         </section>
         <section class="panel">
           <h2>Actions, in order</h2>
           <div class="table-wrap"><table><thead><tr><th>#</th><th>Next action</th><th>Hours</th><th>Accumulated</th></tr></thead>
             <tbody><tr v-for="(step,i) in result.steps" :key="i">
-              <td>{{i+1}}</td><td>{{step.detail}}</td><td>{{hours(step.seconds)}}</td><td>{{hours(result.steps.slice(0,i+1).reduce((sum,x)=>sum+x.seconds,0))}}</td>
+              <td>{{i+1}}</td><td>{{step.detail}}</td><td>{{hours(step.seconds)}}</td><td>{{hours(step.cumulativeSeconds)}}</td>
             </tr></tbody></table></div>
           <p v-if="!result.steps.length" class="note">The search found no supported progression action on the selected route.</p>
         </section>
