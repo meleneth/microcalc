@@ -68,7 +68,18 @@ onUnmounted(()=>worker?.terminate());
           <h2>Actions, in order</h2>
           <div class="table-wrap"><table><thead><tr><th>#</th><th>Next action</th><th>Hours</th><th>Accumulated</th></tr></thead>
             <tbody><tr v-for="(step,i) in result.steps" :key="i">
-              <td>{{i+1}}</td><td>{{step.detail}}</td><td>{{hours(step.seconds)}}</td><td>{{hours(step.cumulativeSeconds)}}</td>
+              <td>{{i+1}}</td><td>{{step.detail}}
+              <div v-if="step.meta?.timeBreakdown" class="note">
+                Fight {{hours(step.meta.timeBreakdown.combat)}}h ·
+                Between kills {{hours(step.meta.timeBreakdown.respawn)}}h ·
+                Search {{hours(step.meta.timeBreakdown.search)}}h ·
+                Banking {{hours(step.meta.timeBreakdown.banking)}}h ·
+                Food &amp; potions {{hours(step.meta.timeBreakdown.supplies)}}h
+              </div>
+              <div v-if="step.meta?.segments?.length>1" class="note">
+                {{step.meta.segments.map(x=>x.monster+' ('+x.from+'→'+x.to+')').join(' · ')}}
+              </div>
+              </td><td>{{hours(step.seconds)}}</td><td>{{hours(step.cumulativeSeconds)}}</td>
             </tr></tbody></table></div>
           <p v-if="!result.steps.length" class="note">The search found no supported progression action on the selected route.</p>
         </section>
