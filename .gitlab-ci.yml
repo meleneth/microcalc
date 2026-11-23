@@ -1,0 +1,28 @@
+stages:
+  - test
+  - build
+
+default:
+  image: node:22-bookworm-slim
+  cache:
+    key:
+      files:
+        - package.json
+    paths:
+      - .npm/
+
+test:
+  stage: test
+  script:
+    - npm install --no-audit --no-fund --cache .npm
+    - npm test
+
+build:
+  stage: build
+  script:
+    - npm install --no-audit --no-fund --cache .npm
+    - npm run build
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - dist/
