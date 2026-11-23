@@ -4,6 +4,7 @@ import { lootTables, expectedKillsForDrop } from "./lootTables.js";
 import { foods } from "./foods.js";
 import { evaluate, defaults, meleeMaxHit } from "./solver.js";
 import { gameConstraints } from "./progression.js";
+import { buildRouteJobs } from "./routeReport.js";
 
 // Search actions are *milestones* rather than individual XP ticks.
 // This is an anytime goal-directed best-first search over priced transitions.
@@ -13,7 +14,7 @@ const SKILLS=["attack","strength","defense","fishing","cooking","herblaw"];
 const COMBAT=["attack","strength","defense"];
 const CAP=99;
 const defaultOptions={
-  maxStates:12000,
+  maxStates:30000,
   maxSeconds:3600*24*30,
   maxLevel:45,
   encounterAvailability:["Island rodent","Mouse","Chicken","Giant rat","Cow","Goblin",
@@ -351,9 +352,9 @@ export function* solveGoldenPathProgress(userOptions={}){
     type:"progress",phase:stage,expanded,visited:discovered,queued:heap.size,
     pruned,limit:opts.maxStates,bestKnightRate:bestRate,
     incumbentSeconds:incumbent?.cost??null,
-    incumbentSteps:incumbent?reconstruct(incumbent,nodes):[],
-    nextAction:incumbent?reconstruct(incumbent,nodes)[0]?.detail??null:
-      closest?reconstruct(closest,nodes)[0]?.detail??null:null,
+    incumbentSteps:incumbent?buildRouteJobs(reconstruct(incumbent,nodes),initial,bestEquipped):[],
+    nextAction:incumbent?buildRouteJobs(reconstruct(incumbent,nodes),initial,bestEquipped)[0]?.detail??null:
+      closest?buildRouteJobs(reconstruct(closest,nodes),initial,bestEquipped)[0]?.detail??null:null,
     currentLevels:closest?.state??initial
   });
   while(heap.size&&expanded<opts.maxStates){
@@ -410,6 +411,7 @@ export function* solveGoldenPathProgress(userOptions={}){
   stage="route";yield snapshot();
   const found=incumbent??closest;
   const steps=reconstruct(found,nodes);
+  const jobs=buildRouteJobs(steps,initial,bestEquipped);
   const exhausted=heap.size===0;
   return {
     success:!!incumbent,partial:!incumbent,search:"anytime-dominance-best-first",
@@ -420,7 +422,7 @@ export function* solveGoldenPathProgress(userOptions={}){
       enemyDamage:"provisional",groupCombat:"excluded pending damage attribution",
       energy:"nonbinding",gear:"drop-sourced only"},
     start:initial,final:found?.state??initial,
-    totalSeconds:found?.cost??0,steps,
+    totalSeconds:found?.cost??0,steps,jobs,
     totalExpectedFood:steps.reduce((sum,step)=>sum+(step.meta?.expectedFood??0),0),
     totalFoodSupplySeconds:steps.reduce((sum,step)=>sum+(step.meta?.foodSupplySeconds??0),0),
     expectedPotionDoses:steps.reduce((sum,step)=>sum+(step.meta?.expectedPotions??0),0),
