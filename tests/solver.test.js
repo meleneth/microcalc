@@ -74,3 +74,10 @@ test("cycle timing decomposes and every extra respawn second is charged per kill
  assert.ok(Math.abs(Object.values(slow.timeBreakdown).filter((_,i)=>i<5).reduce((a,b)=>a+b,0)-slow.cycle)<1e-9);
  assert.equal(slow.timeBreakdown.respawn,6);
 });
+
+test("default between-monster delay is five seconds",()=>{
+ assert.equal(defaults.respawnDelaySeconds,5);
+ const result=evaluate(mobs.find(m=>m.name==="Cow"),defaults);
+ assert.equal(result.respawnDelay,5);
+ assert.equal(result.timeBreakdown.respawn,5);
+});
