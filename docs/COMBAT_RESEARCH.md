@@ -19,7 +19,7 @@ The wiki publishes monster HP, Attack, Strength and Defence plus an XP table and
 | Player Strength -> max hit | user reports +1 max damage per 6 effective Strength, screenshot: 13 effective Strength gives max hit 3 | verify thresholds at 5/6 and 11/12 and interactions with flat damage gear |
 | Damage distribution after hit | unknown | implementation or raw hit histogram (including zero-damage ambiguity) |
 | Enemy attack speed | unspecified per monster | observed timestamps or implementation |
-| Combat XP per damage and skill training style | unknown | before/after XP measurements for controlled fights |
+| Combat XP per actual damage | user reports 2 XP per effective damage, no overkill | identify which skill receives XP, and confirm multiplayer XP allocation |
 | Starting HP 10, default attack interval 6s, auto-eat at 35% | observed in third-party planner UI | corroborate against game |
 | Equipment/abilities/potions and attack speed effects | partly exposed in planner UI | source-level or behavioral validation |
 
@@ -51,3 +51,9 @@ The user reports one additional maximum melee damage per six Strength. Their scr
 ## Between-monster downtime (2026-11-23)
 
 The user reports roughly 3–6 seconds between consecutive monsters. There is currently no confirmed official timing constant from the sources inspected. The combat solver now exposes `respawnDelaySeconds` as a separate parameter, defaulting to 4.5 seconds for sensitivity analysis. `searchSeconds` is reserved for actual loot/search overhead, and switching to another monster is a separate cost again. The previous default of 5 seconds for search was a conflation; it has been reset to zero for new settings. Existing Pinia localStorage settings may retain the previous search value until manually adjusted. Do not count downtime twice. The current expectation-based model charges one delay per kill for sustained farming; a future encounter event simulation should model delays after kills, not before the initial target.
+
+## Hit chance and XP observations (2026-11-23)
+
+Cow hit chance, with no sword and no potion: 17 effective Attack → 72%; with +5 Attack potion: 22 → 77%; with +2 Attack sword as well: 24 → 79%. These three readings satisfy `P(hit) = 55% + effectiveAttack × 1 percentage point` **at Cow Defence 5 and within effective Attack 17–24 only**. We interpolate in this observed range, and retain the provisional global model elsewhere. Do not extrapolate to other monster defences or attribute the 55% intercept to a game formula.
+
+Combat XP: user reports 2 XP per damage actually removed from enemy HP, with no credit for overkill. `combatXpForHit(10,3) === 6`. A fully solo-killed 8 HP Cow yields 16 total combat XP under this rule, irrespective of its max hit. A Black Knight fully solo killed yields 76. In groups, individual XP depends on attributed damage, which remains unknown. Skill allocation/training styles also remain unverified.
