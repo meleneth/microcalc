@@ -41,3 +41,15 @@ Neither outcome proves real-world impossibility. Fishing gates are provisional
 model parameters rather than confirmed game unlocks. Monster combat rolls, actual attack
 intervals, skilling ingredient acquisition, potion production schedules,
 player travel and survivability need further calibration.
+
+## Combat timing diagnosis
+
+Each solo kill now uses finite-HP expected attack counts, rather than
+`HP / average DPS`, so overkill on tiny monsters cannot create fictitious
+combat throughput. Time is itemized into fighting, the configurable 4.5-second
+between-monster delay (estimated), looting/search, banking and food/potion
+supply. The delay is charged once per kill, not once per training action.
+A multi-level Strength action is repriced at each intermediate level and may
+switch training monsters as soon as another target becomes economical.
+The UI displays these cost categories alongside route steps so assumptions
+can be checked against observations.
