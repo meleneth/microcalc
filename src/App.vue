@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { usePlanner } from "./stores/planner.js";
 import { sources } from "./data.js";
 import { strengthPotionValue, strengthPotionDependency } from "./progression.js";
+import { foods } from "./foods.js";
 const store=usePlanner();
 const fmt=n=>Number.isFinite(n)?Math.round(n).toLocaleString():"—";
 const hours=s=>Number.isFinite(s)?(s/3600).toFixed(1):"—";
@@ -14,7 +15,7 @@ const inputs=[
  ["hitpoints","Hitpoints",1,999],["attackBonus","Equipment attack",0,500],["strengthBonus","Equipment strength",0,500],
  ["defenseBonus","Equipment defence",0,500],["damageBonus","Flat max-hit bonus",0,100],
  ["cooldown","Attack seconds",0.5,60],["enemyCooldown","Enemy attack seconds",0.5,60],
- ["foodHeal","Food HP healed",0,100],["foodCount","Food per trip",0,100],["regenPerSecond","Passive HP / second",0,10],
+ ["foodHeal","Legacy flat food HP",0,100],["foodCount","Food per trip",0,100],["foodRecoveryBonus","Bonus healing per food",0,100],["foodSupplySeconds","Acquire + cook seconds / food",0,3600],["foodCooldownSeconds","Eating cooldown (unverified)",0,120],["eatActionSeconds","Time spent eating",0,120],["regenPerSecond","Passive HP / second",0,10],
  ["respawnDelaySeconds","Between-monster delay (estimated)",0,60],["searchSeconds","Loot/search seconds / kill",0,600],["bankSeconds","Bank round-trip seconds",0,3600],["killsPerBank","Kills per bank trip",1,1000],
  ["foodRestockSeconds","Food restock seconds / unit",0,600]
 ];
@@ -25,12 +26,16 @@ const inputs=[
   <section class="intro"><p class="eyebrow">PROGRESSION ENGINE / 001</p><h1>The road to <span>Black Knight.</span></h1><p>Compare ordinary combat encounters, then chart a progression route. No rare gauntlets, no safe spots, no magical endgame shortcuts.</p></section>
   <div class="layout">
    <aside class="panel"><h2>01 / Loadout and rules</h2><p class="note">Stats are editable. Accuracy and damage timing are estimates. Combat XP is 2× actual HP removed, with no overkill.</p>
-    <div class="inputs"><label v-for="[key,label,min,max] in inputs" :key="key"><span>{{label}}</span><input type="number" :min="min" :max="max" :step="key==='cooldown'||key==='enemyCooldown'||key==='regenPerSecond'||key==='respawnDelaySeconds'?0.1:1" v-model.number="store.settings[key]" /></label></div>
+    <label class="toggle"><input type="checkbox" v-model="store.settings.useFoodEconomy"/> Enable itemized food supply and eating cooldown</label>
+    <label v-if="store.settings.useFoodEconomy" class="toggle">Food type <select v-model="store.settings.foodId"><option v-for="food in foods" :key="food.id" :value="food.id">{{food.id}} ({{food.heal}} HP)</option></select></label>
+    <label v-if="store.settings.useFoodEconomy" class="toggle">Cooldown behavior <select v-model="store.settings.foodCooldownMode"><option value="blocking">Blocks progression</option><option value="cooldown-overlap">Overlaps combat</option></select></label>
+    <div class="inputs"><label v-for="[key,label,min,max] in inputs" :key="key"><span>{{label}}</span><input type="number" :min="min" :max="max" :step="key==='cooldown'||key==='enemyCooldown'||key==='regenPerSecond'||key==='respawnDelaySeconds'||key==='foodCooldownSeconds'||key==='eatActionSeconds'?0.1:1" v-model.number="store.settings[key]" /></label></div>
     <label class="toggle"><input type="checkbox" v-model="store.settings.allowBlackKnight"/> Include Black Knight in training choices</label>
    </aside>
    <main class="results">
     <section class="panel"><div class="section-head"><h2>02 / Combat viability</h2><span class="tag">STANDARD ENCOUNTER</span></div>
       <div class="metrics"><div><small>Time to defeat</small><strong>{{knight.ttk.toFixed(1)}}s</strong></div><div><small>Expected damage</small><strong>{{knight.expectedDamage.toFixed(1)}} HP</strong></div><div><small>Food / kill</small><strong>{{knight.foodNeeded.toFixed(2)}}</strong></div><div><small>Estimated kills / hr</small><strong>{{knight.killsPerHour.toFixed(1)}}</strong></div></div>
+      <p v-if="knight.foodEconomy" class="note">Food: {{knight.foodEconomy.foodId}} ({{knight.foodEconomy.heal}} effective HP), {{knight.foodEconomy.foodSecondsPerKill.toFixed(1)}}s supply time and {{knight.foodEconomy.eatSecondsPerKill.toFixed(1)}}s eating overhead per estimated kill. Cooldown overlap remains unverified.</p>
       <p class="note">A solo kill earns 2 XP per HP removed (Black Knight: 76 XP). Cow hit chance uses measured interpolation only at effective Attack 17–24; outside that range, accuracy remains provisional.</p>
       <p class="note">Per kill: {{knight.ttk.toFixed(1)}}s fighting + {{knight.respawnDelay.toFixed(1)}}s between monsters + {{knight.searchDelay.toFixed(1)}}s searching, plus amortized banking and supplies. The 4.5s default is an unverified midpoint of the reported 3–6s interval.</p>
       <p class="warning">Expected values are not survival guarantees. Simulating variance and exact game rolls is a future calibration requirement.</p>
