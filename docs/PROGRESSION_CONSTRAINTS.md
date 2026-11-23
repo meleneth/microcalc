@@ -27,3 +27,7 @@ Do not present these dependency helpers as a proven golden-path solver.
 ## Energy assumption (user-confirmed 2026-11-23)
 
 Energy is always full for the user's intended progression route. Do not model energy consumption, regeneration, resting, or energy-driven scheduling as constraints or costs. Optimize real elapsed time (combat, respawns, supply gathering, crafting, travel, banking, and item drops) instead. Treat energy as nonbinding even for Fishing, Cooking, and Herblaw.
+
+## Unattended food correction (2026-11-23)
+
+The user runs unattended auto-eat and currently uses cooked trout (+7 HP base healing). The eating cooldown prevents rapid spam of undersized food but is not a routine time penalty for unattended play. Default food is trout and default eating mode is `unattended`, which applies zero eating-time penalty; acquisition and cooking costs remain. Other modes exist for explicit manual what-if scenarios only. Cooldown can still create a survival constraint during burst damage, requiring a future discrete-event HP and food-cooldown simulator. Existing browser localStorage can preserve older selections until changed.
