@@ -9,7 +9,7 @@ export const gameConstraints={
   groups:{"Turkey":8,"Imp":2},
   turkeyRequirements:[{item:"fox hat",quantity:1}],
   trades:[{item:"fox hat",input:"lucky paw",quantity:1,source:"Mouse"}],
-  strengthPotion:{requiredDrop:"limpwurt root",source:"Bear",recipeVerified:false}
+  strengthPotion:{level:13,skill:"herblaw",requiredDrop:"limpwurt root",source:"Bear",recipeVerified:true,ingredients:[{item:"vial of water",quantity:1},{item:"limpwurt root",quantity:1}],xp:735,craftSeconds:386,boost:5,durationSeconds:3600}
 };
 export function equipable(item,levels){
   return Object.entries(item.requirements).every(([skill,level])=>(levels[skill]||1)>=level);
@@ -57,9 +57,26 @@ export function foxHatDependency(stats=defaults) {
     trade:{consume:"lucky paw",quantity:1}};
 }
 export function strengthPotionDependency(quantity=1,stats=defaults){
-  return {item:"strength potion",quantity,recipeVerified:false,
-    knownBottleneck:dropAcquisition("Bear","limpwurt root",quantity,stats),
-    note:"Assumes one Limpwurt Root per potion pending confirmation; other ingredients and Herblaw requirement unresolved."};
+  const recipe=gameConstraints.strengthPotion;
+  const n=integer(quantity,1);
+  return {item:"strength potion",quantity:n,recipeVerified:true,
+    requirements:{herblaw:recipe.level},
+    ingredients:recipe.ingredients.map(i=>({...i,quantity:i.quantity*n})),
+    xp:n*recipe.xp,craftSeconds:n*recipe.craftSeconds,
+    boost:recipe.boost,durationSeconds:recipe.durationSeconds,
+    knownBottleneck:dropAcquisition("Bear","limpwurt root",n,stats),
+    note:"Vial of water can be made from purchased vials; bear root drops are probabilistic. Travel, encounter availability and downtime not yet included."};
+}
+export function strengthPotionValue(effectiveStrength,quantity=1,stats=defaults){
+  const before=meleeMaxHit(effectiveStrength),after=meleeMaxHit(effectiveStrength+5);
+  const supply=strengthPotionDependency(quantity,stats);
+  return {before,after,maxHitGain:after-before,effectiveStrength,
+    boostedStrength:effectiveStrength+5,secondsPerDose:supply.durationSeconds,
+    expectedBearKills:supply.knownBottleneck.expectedKills,
+    estimatedSupplySeconds:supply.knownBottleneck.estimatedSeconds===null
+      ?null:supply.knownBottleneck.estimatedSeconds+supply.craftSeconds,
+    damageBreakpointGained:after>before,
+    caution:"Expected damage is provisional until the on-hit distribution and accuracy equation are verified."};
 }
 export function groupEncounter(name){
   const size=gameConstraints.groups[name];
