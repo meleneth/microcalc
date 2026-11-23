@@ -86,3 +86,12 @@ test("route report preserves total time, food and potion doses",()=>{
  assert.ok(Math.abs(doses-r.expectedPotionDoses)<1e-5);
  assert.equal(r.start.potion,null);
 });
+
+test("Tutorial Bay is excluded even when requested in encounter availability",()=>{
+ const r=solveGoldenPath({maxStates:120,maxLevel:12,minimumKnightKillsPerHour:999,
+   encounterAvailability:["Island rodent","Mouse","Chicken","Giant rat","Cow"]});
+ assert.ok(r.steps.every(step=>!step.detail.includes("Island rodent")));
+ assert.ok(r.steps.every(step=>
+   !(step.meta?.segments??[]).some(segment=>segment.monster==="Island rodent")));
+ assert.ok(r.jobs.every(job=>!job.detail.includes("Island rodent")));
+});
