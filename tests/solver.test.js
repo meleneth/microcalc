@@ -60,7 +60,7 @@ test("itemized supply and eating delay affect farming rates",()=>{
 
 test("expected attack count respects finite hitpoints and overkill",()=>{
  assert.equal(expectedAttacksToKill(3,1,0.5),6);
- assert.equal(expectedAttacksToKill(3,3,1),1+((1+2/3)+(1+1/3))/3);
+ assert.equal(expectedAttacksToKill(3,3,1),1+(1+4/3)/3);
  assert.ok(expectedAttacksToKill(3,6,1)<expectedAttacksToKill(3,3,1));
  assert.ok(expectedAttacksToKill(3,60,1)>1);
  assert.throws(()=>expectedAttacksToKill(3,0,1));
