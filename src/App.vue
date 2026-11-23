@@ -1,76 +1,84 @@
 <script setup>
-import { computed } from "vue";
-import { usePlanner } from "./stores/planner.js";
+import { ref, computed, onUnmounted } from "vue";
 import { sources } from "./data.js";
-import { strengthPotionValue, strengthPotionDependency } from "./progression.js";
-import { foods } from "./foods.js";
-import { mobs } from "./data.js";
-import { evaluate } from "./solver.js";
-const store=usePlanner();
+const maxStates=10000;
+const status=ref("idle");
+const progress=ref(null);
+const result=ref(null);
+const error=ref("");
+let worker=null;
 const fmt=n=>Number.isFinite(n)?Math.round(n).toLocaleString():"—";
-const hours=s=>Number.isFinite(s)?(s/3600).toFixed(1):"—";
-const blackKnight=mobs.find(mob=>mob.name==="Black knight");
-const knight=computed(()=>evaluate(blackKnight,store.settings));
-const strengthSupply=computed(()=>strengthPotionDependency(1,store.settings));
-const strengthBoost=computed(()=>strengthPotionValue(store.settings.strength+store.settings.strengthBonus,1,store.settings));
-const inputs=[
- ["attack","Attack level",1,99],["strength","Strength level",1,99],["defense","Defence level",1,99],
- ["hitpoints","Hitpoints",1,999],["attackBonus","Equipment attack",0,500],["strengthBonus","Equipment strength",0,500],
- ["defenseBonus","Equipment defence",0,500],["damageBonus","Flat max-hit bonus",0,100],
- ["cooldown","Attack seconds",0.5,60],["enemyCooldown","Enemy attack seconds",0.5,60],
- ["foodHeal","Legacy flat food HP",0,100],["foodCount","Food per trip",0,100],["foodRecoveryBonus","Bonus healing per food",0,100],["foodSupplySeconds","Acquire + cook seconds / food",0,3600],["foodCooldownSeconds","Eating cooldown (unverified)",0,120],["eatActionSeconds","Time spent eating",0,120],["regenPerSecond","Passive HP / second",0,10],
- ["respawnDelaySeconds","Between-monster delay (estimated)",0,60],["searchSeconds","Loot/search seconds / kill",0,600],["bankSeconds","Bank round-trip seconds",0,3600],["killsPerBank","Kills per bank trip",1,1000],
- ["foodRestockSeconds","Food restock seconds / unit",0,600]
-];
+const hours=s=>Number.isFinite(s)?(s/3600).toFixed(2):"—";
+const percent=computed(()=>progress.value?.phase==="route"?100:
+  Math.min(99,Math.round(100*(progress.value?.expanded??0)/maxStates)));
+function run(){
+  if(worker){worker.terminate();worker=null;}
+  status.value="running";progress.value=null;result.value=null;error.value="";
+  worker=new Worker(new URL("./solver.worker.js",import.meta.url),{type:"module"});
+  worker.onmessage=({data})=>{
+    if(data.type==="progress")progress.value=data;
+    else if(data.type==="done"){
+      result.value=data.result;status.value="done";worker?.terminate();worker=null;
+    }else if(data.type==="error"){
+      error.value=data.message;status.value="error";worker?.terminate();worker=null;
+    }
+  };
+  worker.onerror=e=>{error.value=e.message||"Solver worker failed";status.value="error";worker?.terminate();worker=null;};
+  worker.postMessage({type:"run",options:{maxStates,maxLevel:45}});
+}
+onUnmounted(()=>worker?.terminate());
 </script>
 <template>
- <div class="app">
-  <header><div class="brand"><span class="pixel">▣</span> MICROCALC <span class="muted">/ combat laboratory</span></div><span class="tag">EARLY GAME · BETA</span></header>
-  <section class="intro"><p class="eyebrow">PROGRESSION ENGINE / 001</p><h1>The road to <span>Black Knight.</span></h1><p>Compare ordinary combat encounters, then chart a progression route. No rare gauntlets, no safe spots, no magical endgame shortcuts.</p></section>
-  <div class="layout">
-   <aside class="panel"><h2>01 / Loadout and rules</h2><p class="note">Stats are editable. Accuracy and damage timing are estimates. Combat XP is 2× actual HP removed, with no overkill.</p>
-    <label class="toggle"><input type="checkbox" v-model="store.settings.useFoodEconomy"/> Enable itemized food and supply costs</label>
-    <label v-if="store.settings.useFoodEconomy" class="toggle">Food type <select v-model="store.settings.foodId"><option v-for="food in foods" :key="food.id" :value="food.id">{{food.id}} ({{food.heal}} HP)</option></select></label>
-    <label v-if="store.settings.useFoodEconomy" class="toggle">Cooldown behavior <select v-model="store.settings.foodCooldownMode"><option value="unattended">Unattended auto-eat (no time penalty)</option><option value="blocking">Cooldown blocks actions (manual scenario)</option><option value="cooldown-overlap">Cooldown overlaps attacks (manual scenario)</option></select></label>
-    <div class="inputs"><label v-for="[key,label,min,max] in inputs" :key="key"><span>{{label}}</span><input type="number" :min="min" :max="max" :step="key==='cooldown'||key==='enemyCooldown'||key==='regenPerSecond'||key==='respawnDelaySeconds'||key==='foodCooldownSeconds'||key==='eatActionSeconds'?0.1:1" v-model.number="store.settings[key]" /></label></div>
-    <label class="toggle"><input type="checkbox" v-model="store.settings.allowBlackKnight"/> Include Black Knight in training choices</label>
-   </aside>
-   <main class="results">
-    <section class="panel"><div class="section-head"><h2>02 / Combat viability</h2><span class="tag">STANDARD ENCOUNTER</span></div>
-      <div class="metrics"><div><small>Time to defeat</small><strong>{{knight.ttk.toFixed(1)}}s</strong></div><div><small>Expected damage</small><strong>{{knight.expectedDamage.toFixed(1)}} HP</strong></div><div><small>Food / kill</small><strong>{{knight.foodNeeded.toFixed(2)}}</strong></div><div><small>Estimated kills / hr</small><strong>{{knight.killsPerHour.toFixed(1)}}</strong></div></div>
-      <p v-if="knight.foodEconomy" class="note">Food: {{knight.foodEconomy.foodId}} ({{knight.foodEconomy.heal}} effective HP), {{knight.foodEconomy.foodSecondsPerKill.toFixed(1)}}s supply time and {{knight.foodEconomy.eatSecondsPerKill.toFixed(1)}}s eating overhead per estimated kill. Unattended auto-eat has no per-food cooldown time tax; survival under repeated hits still requires a discrete-event simulation.</p>
-      <p class="note">A solo kill earns 2 XP per HP removed (Black Knight: 76 XP). Cow hit chance uses measured interpolation only at effective Attack 17–24; outside that range, accuracy remains provisional.</p>
-      <p class="note">Per kill: {{knight.ttk.toFixed(1)}}s fighting + {{knight.respawnDelay.toFixed(1)}}s between monsters + {{knight.searchDelay.toFixed(1)}}s searching, plus amortized banking and supplies. The 4.5s default is an unverified midpoint of the reported 3–6s interval.</p>
-      <p class="warning">Expected values are not survival guarantees. Simulating variance and exact game rolls is a future calibration requirement.</p>
+  <div class="app">
+    <header><div class="brand"><span class="pixel">▣</span> MICROCALC <span class="muted">/ progression engine</span></div><span class="tag">BLACK KNIGHT / ROUTE SEARCH</span></header>
+    <section class="intro">
+      <p class="eyebrow">LEVEL ONE → SUSTAINABLE BLACK KNIGHT FARMING</p>
+      <h1>Find the <span>fastest road.</span></h1>
+      <p>Calculate whether your next hour is better spent on Attack, a Strength damage breakpoint, equipment, food, or potion preparation. Every choice includes the time it costs and how it changes future combat.</p>
+      <button class="run-button" :disabled="status==='running'" @click="run">{{status==='running'?'Solving…':'▶ Run Solver'}}</button>
     </section>
-    <section class="panel"><div class="section-head"><h2>SUPPLY / Bear → Strength Potion</h2><span class="tag">HERBLAW 13</span></div>
-      <div class="metrics"><div><small>Bear kills / root (expected)</small><strong>{{strengthSupply.knownBottleneck.expectedKills}}</strong></div>
-      <div><small>Potion max hit gain</small><strong>+{{strengthBoost.maxHitGain}}</strong></div>
-      <div><small>Potion lasts</small><strong>60 min</strong></div><div><small>Herblaw XP per dose</small><strong>735</strong></div></div>
-      <p class="note">1 purchased vial filled with water + 1 Limpwurt Root, 386 seconds per brew. Bear drops the root at 1/32. Expected kills are not a guarantee. {{strengthBoost.damageBreakpointGained?'Your current Strength crosses a damage breakpoint with +5.':'Your current Strength does not cross a damage breakpoint with +5.'}}</p>
-    </section>
-    <section class="panel"><div class="section-head"><h2>03 / Farming candidates</h2><span class="tag">ESTIMATED XP / HR</span></div>
-     <div class="table-wrap"><table><thead><tr><th>Target</th><th>XP/hr</th><th>Kills/hr</th><th>Damage</th></tr></thead><tbody><tr v-for="r in store.candidates.slice(0,12)" :key="r.mob.name"><td>{{r.mob.name}}</td><td>{{fmt(r.xpPerHour)}}</td><td>{{r.killsPerHour.toFixed(1)}}</td><td>{{r.expectedDamage.toFixed(1)}}</td></tr></tbody></table></div>
-     <p v-if="!store.candidates.length" class="warning">No encounter passes the current expected-survival filter. Improve defence, hitpoints, or food.</p>
-    </section>
-    <section class="panel"><div class="section-head"><h2>04 / Level-one route search</h2><span class="tag">BOUNDED DIJKSTRA</span></div>
-     <p class="note">Starts from level 1 in Attack, Strength, Defence, Fishing, Cooking and Herblaw. Considers time-to-level, equipment drop farming, food costs and Black Knight viability. Your current character stats do not influence this search.</p>
-     <label class="goal">Search budget (states) <input type="number" min="100" max="20000" step="100" v-model.number="store.searchBudget"/></label>
-     <p class="summary">{{store.plan.success?"Candidate route found":"Partial route, no verified goal reached"}} · {{hours(store.plan.totalSeconds)}} hours · {{fmt(store.plan.expanded)}} explored states</p>
-     <p class="warning" v-if="!store.plan.success">{{store.plan.reason}}</p>
-     <div v-if="store.plan.knight.best" class="metrics">
-       <div><small>Expected Knight kills / hr</small><strong>{{store.plan.knight.best.killsPerHour.toFixed(1)}}</strong></div>
-       <div><small>Food</small><strong>{{store.plan.knight.best.food}}</strong></div>
-       <div><small>Max melee hit</small><strong>{{store.plan.knight.best.maxHit}}</strong></div>
-       <div><small>Search status</small><strong>{{store.plan.success?"READY":"PARTIAL"}}</strong></div>
-     </div>
-     <p class="note">Accuracy, enemy damage, and gathering rates are provisional. Full statistical survival and multiplayer routes still require calibration.</p>
-     <div class="table-wrap"><table><thead><tr><th>Step</th><th>Action</th><th>Estimated hours</th></tr></thead><tbody>
-       <tr v-for="(step,i) in store.plan.steps" :key="i"><td>{{i+1}}</td><td>{{step.detail}}</td><td>{{hours(step.seconds)}}</td></tr>
-     </tbody></table></div>
-    </section>
-   </main>
+    <main class="solver-view">
+      <section v-if="status==='idle'" class="panel"><h2>Ready to explore</h2><p class="note">Two phases: search for the cheapest progression strategy, then reconstruct the recommended route. Starts at level 1 in all six skills, with no assumed free equipment. This is a bounded model, not a guaranteed optimal in-game solution.</p></section>
+      <section v-if="status==='running'" class="panel" aria-live="polite">
+        <div class="section-head"><h2>{{progress?.phase==='route'?'Phase 2 / Reconstructing route':'Phase 1 / Exploring progression'}}</h2><span class="tag">RUNNING</span></div>
+        <div class="progress-track"><div class="progress-fill" :style="{width:percent+'%'}"></div></div>
+        <div class="metrics">
+          <div><small>States evaluated</small><strong>{{fmt(progress?.expanded??0)}}</strong></div>
+          <div><small>States discovered</small><strong>{{fmt(progress?.visited??0)}}</strong></div>
+          <div><small>Search budget</small><strong>{{fmt(maxStates)}}</strong></div>
+          <div><small>Best Knight kills/hr</small><strong>{{(progress?.bestKnightRate??0).toFixed(1)}}</strong></div>
+        </div>
+        <p class="note">Searching competing training and unlock routes. The bar indicates the state budget consumed, not a prediction of completion time.</p>
+      </section>
+      <section v-if="status==='error'" class="panel"><h2>Solver failed</h2><p class="warning">{{error}}</p><button class="run-button" @click="run">Retry</button></section>
+      <template v-if="result">
+        <section class="panel">
+          <div class="section-head"><h2>Phase 2 / Recommended route</h2><span class="tag">{{result.success?'GOAL REACHED':'PARTIAL RESULT'}}</span></div>
+          <p class="summary">{{result.success?'Candidate Black Knight route found':'No verified goal within search budget'}}</p>
+          <div class="metrics">
+            <div><small>Estimated hours</small><strong>{{hours(result.totalSeconds)}}</strong></div>
+            <div><small>Actions</small><strong>{{result.steps.length}}</strong></div>
+            <div><small>Evaluated states</small><strong>{{fmt(result.expanded)}}</strong></div>
+            <div><small>Knight kills/hr</small><strong>{{(result.knight.best?.killsPerHour??0).toFixed(1)}}</strong></div>
+          </div>
+          <p v-if="!result.success" class="warning">{{result.reason}}</p>
+          <p class="note">Each step uses the cheapest modeled fight available at that state. Combat XP credits 2× actual monster HP removed; food preparation, respawn, banking, and potion supply are included as estimated costs. Unverified game mechanics remain estimates.</p>
+        </section>
+        <section class="panel">
+          <h2>Actions, in order</h2>
+          <div class="table-wrap"><table><thead><tr><th>#</th><th>Next action</th><th>Hours</th><th>Accumulated</th></tr></thead>
+            <tbody><tr v-for="(step,i) in result.steps" :key="i">
+              <td>{{i+1}}</td><td>{{step.detail}}</td><td>{{hours(step.seconds)}}</td><td>{{hours(result.steps.slice(0,i+1).reduce((sum,x)=>sum+x.seconds,0))}}</td>
+            </tr></tbody></table></div>
+          <p v-if="!result.steps.length" class="note">The search found no supported progression action on the selected route.</p>
+        </section>
+        <section class="panel"><h2>Ending levels and equipment</h2>
+          <p>Attack {{result.final.attack}} · Strength {{result.final.strength}} · Defence {{result.final.defense}} · Fishing {{result.final.fishing}} · Cooking {{result.final.cooking}} · Herblaw {{result.final.herblaw}}</p>
+          <p class="note">Gear: {{result.final.gear.join(', ')||'none'}}</p>
+          <p class="warning">Expected-value survival is not proof of survivability. Enemy attack rolls, potion duration accounting, supply acquisition and some monster availability still require measurement.</p>
+        </section>
+      </template>
+    </main>
+    <footer>Sources: <a :href="sources.xp" target="_blank">XP table</a> · <a :href="sources.mobs" target="_blank">Monsters</a> · <a :href="sources.reference" target="_blank">Combat reference</a>. Calibrated observations and assumptions are not interchangeable.</footer>
   </div>
-  <footer>Wiki snapshots: <a :href="sources.xp" target="_blank">XP table</a> · <a :href="sources.mobs" target="_blank">Monster stats</a> · <a :href="sources.reference" target="_blank">Combat planner reference</a> · Model assumptions are NOT wiki facts.</footer>
- </div>
 </template>
