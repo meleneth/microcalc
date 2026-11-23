@@ -34,10 +34,23 @@
     "The active low-tier Attack potion contributes +5 Attack, rather than permanently changing the Attack level.",
     "The +5 in the Attack bonuses row is visually distinct from the +2 equipment value.",
     "Hit and dodge percentages are UI output for this encounter, not raw combat trials.",
-    "No enemy stats are independently asserted by this fixture."
+    "No enemy stats are independently asserted by this fixture.",
+    "The second 77% observation was reported after removing a +2 Attack sword; other weapon-related effects were not independently checked."
   ],
   "evidence": [
     "image(20261123-083310).png",
     "image(20261123-083358-1).png"
+  ],
+  "pairedHitChanceObservations": [
+    {
+      "effectiveAttack": 24,
+      "displayedHitChancePercent": 79,
+      "setup": "Attack 17 + equipment 2 + active potion 5"
+    },
+    {
+      "effectiveAttack": 22,
+      "displayedHitChancePercent": 77,
+      "setup": "Attack 17 + active potion 5, +2 Attack sword unequipped; assumes potion remained active"
+    }
   ]
 }
