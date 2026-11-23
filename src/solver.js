@@ -20,13 +20,26 @@ export function meleeMaxHit(effectiveStrength,flatBonus=0) {
   // The baseline +1 matches the screenshot: 13 effective Strength -> 3 max hit.
   return Math.max(1,1+Math.floor(Math.max(0,effectiveStrength)/6)+flatBonus);
 }
+export function combatXpForHit(rolledDamage,remainingHp) {
+  if(!Number.isFinite(rolledDamage)||!Number.isFinite(remainingHp)||rolledDamage<0||remainingHp<0)
+    throw new RangeError("Damage and remaining HP must be finite and nonnegative");
+  return 2*Math.min(rolledDamage,remainingHp);
+}
+export function combatXpForSoloKill(initialHp) {
+  if(!Number.isFinite(initialHp)||initialHp<0) throw new RangeError("Monster HP must be nonnegative");
+  // Applies only to full solo kills where all damage was attributed to this player.
+  return 2*initialHp;
+}
 export function evaluate(mob,stats,rules={}) {
   const attack=stats.attack+stats.attackBonus;
   const strength=stats.strength+stats.strengthBonus;
   const defense=stats.defense+stats.defenseBonus;
   const cooldown=Math.max(0.5,stats.cooldown);
   const maxHit=meleeMaxHit(strength,stats.damageBonus);
-  const pHit=chance(attack,mob.defense);
+  // Cow accuracy is directly measured at A=17,22,24 with 72%,77%,79%.
+  // Interpolation is used ONLY in this observed range, not extrapolated.
+  const cowObserved=mob.name==="Cow"&&mob.defense===5&&attack>=17&&attack<=24;
+  const pHit=cowObserved?0.55+attack/100:chance(attack,mob.defense);
   const dps=pHit*(maxHit+1)/2/cooldown;
   const ttk=mob.hp/Math.max(0.001,dps);
   const enemyMax=Math.max(1,Math.floor(1+mob.strength/10));
@@ -40,8 +53,8 @@ export function evaluate(mob,stats,rules={}) {
   const searchDelay=Math.max(0,stats.searchSeconds);
   const cycle=ttk+respawnDelay+searchDelay+Math.max(0,stats.bankSeconds)/Math.max(1,stats.killsPerBank)
     +Math.max(0,stats.foodRestockSeconds)*foodNeeded;
-  const xpPerKill=mob.hp*stats.xpPerDamage; // explicitly adjustable assumption, not confirmed game mechanic
-  return {mob,ttk,respawnDelay,searchDelay,enemyDps,expectedDamage,foodNeeded,safe,maxHit,pHit,xpPerKill,xpPerHour:xpPerKill*3600/cycle,killsPerHour:3600/cycle,cycle};
+  const xpPerKill=combatXpForSoloKill(mob.hp); // 2 XP per actual HP depleted, assuming player deals all damage.
+  return {mob,ttk,respawnDelay,searchDelay,enemyDps,expectedDamage,foodNeeded,safe,maxHit,pHit,accuracySource:cowObserved?"observed-cow-interpolation":"provisional",xpPerKill,xpPerHour:xpPerKill*3600/cycle,killsPerHour:3600/cycle,cycle};
 }
 export function rankTargets(stats) {
   return mobs.map(m=>evaluate(m,stats))
@@ -69,4 +82,4 @@ export function goldenPath(stats,goal={attack:40,strength:40,defense:40}) {
   const knight=evaluate(mobs.find(m=>m.name==="Black knight"),{...state,allowBlackKnight:true});
   return {steps,state,knight,reachable:targets.every(s=>state[s]>=goal[s]),totalSeconds:steps.reduce((n,s)=>n+s.seconds,0),method:"greedy-estimate"};
 }
-export const defaults={attack:1,strength:1,defense:1,hitpoints:10,attackBonus:0,strengthBonus:0,defenseBonus:0,damageBonus:0,cooldown:6,enemyCooldown:6,foodHeal:0,foodCount:0,regenPerSecond:0,searchSeconds:0,respawnDelaySeconds:4.5,bankSeconds:90,killsPerBank:20,foodRestockSeconds:8,xpPerDamage:4,allowBlackKnight:false};
+export const defaults={attack:1,strength:1,defense:1,hitpoints:10,attackBonus:0,strengthBonus:0,defenseBonus:0,damageBonus:0,cooldown:6,enemyCooldown:6,foodHeal:0,foodCount:0,regenPerSecond:0,searchSeconds:0,respawnDelaySeconds:4.5,bankSeconds:90,killsPerBank:20,foodRestockSeconds:8,allowBlackKnight:false};
