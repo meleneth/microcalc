@@ -84,7 +84,7 @@ function combatStats(state,optionFood,options){
     foodSupplySeconds:optionFood?.supplySeconds??0,
     foodCount:24,hitpoints:10,foodCooldownMode:"unattended",
     regenPerSecond:0,foodHeal:optionFood?.heal??0,
-    searchSeconds:0,respawnDelaySeconds:options.respawnDelaySeconds??4.5,
+    searchSeconds:0,respawnDelaySeconds:options.respawnDelaySeconds??5,
     bankSeconds:options.bankSeconds??90,killsPerBank:options.killsPerBank??20,
     foodRecoveryBonus:0};
 }
