@@ -1,0 +1,43 @@
+{
+  "source": "User-provided in-game screenshots, 2026-11-23",
+  "monster": "Cow",
+  "player": {
+    "levels": {
+      "attack": 17,
+      "strength": 11,
+      "defense": 1
+    },
+    "bonuses": {
+      "attackGear": 2,
+      "attackPotion": 5,
+      "strengthGear": 2,
+      "defenseGear": 6,
+      "foodRecovery": 4,
+      "cooking": 3
+    },
+    "effective": {
+      "attack": 24,
+      "strength": 13,
+      "defense": 7
+    },
+    "maxHp": 10,
+    "maxMeleeHit": 3,
+    "attackCooldownSeconds": 6,
+    "autoEatThresholdPercent": 35
+  },
+  "enemy": {
+    "hpShown": 8,
+    "hitChancePercentShown": 79,
+    "dodgeChancePercentShown": 41
+  },
+  "notes": [
+    "The active low-tier Attack potion contributes +5 Attack, rather than permanently changing the Attack level.",
+    "The +5 in the Attack bonuses row is visually distinct from the +2 equipment value.",
+    "Hit and dodge percentages are UI output for this encounter, not raw combat trials.",
+    "No enemy stats are independently asserted by this fixture."
+  ],
+  "evidence": [
+    "image(20261123-083310).png",
+    "image(20261123-083358-1).png"
+  ]
+}
