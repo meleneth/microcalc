@@ -142,27 +142,53 @@ function knightAssessment(state,opts){
     best,gear:bestEquipped(state).names,
     warning:"Expected-value survival only; attack roll, enemy max hit, cooldown and food safety unverified."};
 }
+// Re-evaluate combat at EVERY level and allow the target monster, food and
+// potion to change as stats improve. Never price a six-level Strength action
+// using only the initial level's speed.
+function priceTraining(state,skill,target,opts){
+  const segments=[];let seconds=0,kills=0,totalXp=0;
+  const timeBreakdown={combat:0,respawn:0,search:0,banking:0,supplies:0};
+  for(let current=state[skill];current<target;current++){
+    const intermediate={...state,[skill]:current};
+    const fight=bestFight(intermediate,opts);
+    if(!fight||!(fight.xpPerKill>0))return null;
+    const amount=xp[current]-xp[current-1];
+    const n=Math.ceil(amount/fight.xpPerKill);
+    const duration=n*fight.cycle;
+    if(!Number.isFinite(duration)||duration<=0)return null;
+    seconds+=duration;kills+=n;totalXp+=amount;
+    for(const key of Object.keys(timeBreakdown))
+      timeBreakdown[key]+=n*(fight.timeBreakdown?.[key]??0);
+    const previous=segments.at(-1);
+    if(previous&&previous.monster===fight.mob.name&&previous.food===fight.food&&
+      previous.potion===(fight.potion?.name??null)){
+      previous.to=current+1;previous.kills+=n;previous.seconds+=duration;
+    }else segments.push({from:current,to:current+1,monster:fight.mob.name,
+      food:fight.food,potion:fight.potion?.name??null,kills:n,seconds:duration});
+  }
+  return {seconds,kills,totalXp,segments,timeBreakdown};
+}
 function trainingOptions(state,opts){
-  const fights=viableFights(state,opts).sort((a,b)=>b.xpPerHour-a.xpPerHour);
-  const best=fights[0];
   const actions=[];
-  if(best)for(const skill of COMBAT){
+  for(const skill of COMBAT){
     const immediate=nextMilestone(skill,state[skill],opts.maxLevel);
     if(immediate===null)continue;
-    // Competing actions: one level now, or buy a whole damage breakpoint.
-    // The breakpoint target is based on effective equipped Strength, not raw level.
-    const strengthBonus=bestEquipped(state).bonuses.strength;
-    const untilBreakpoint=6-((state.strength+strengthBonus)%6);
-    const breakpoint=skill==="strength"
-      ?Math.min(opts.maxLevel,state.strength+untilBreakpoint):null;
-    const targets=[...new Set([immediate,breakpoint].filter(x=>x!==null && x>state[skill]))];
+    const bonus=bestEquipped(state).bonuses.strength;
+    const untilBreakpoint=6-((state.strength+bonus)%6);
+    const breakpoint=skill==="strength"?
+      Math.min(opts.maxLevel,state.strength+untilBreakpoint):null;
+    const targets=[...new Set([immediate,breakpoint].filter(
+      x=>x!==null&&x>state[skill]))];
     for(const target of targets){
-      const amount=xp[target-1]-xp[state[skill]-1];
-      const kills=Math.ceil(amount/best.xpPerKill);
-      actions.push({skill,to:target,seconds:kills*best.cycle,
-        detail:`Train ${skill} ${state[skill]}→${target} on ${best.mob.name} (${kills} kills, ${best.food} food${best.potion?", strength potion":""})`,
-        meta:{monster:best.mob.name,kills,food:best.food,potion:best.potion?.name??null,xp:amount,maxHit:best.maxHit,xpPerHour:best.xpPerHour,
-          milestone:target===breakpoint && target!==immediate?"strength-breakpoint":"level"}}); 
+      const priced=priceTraining(state,skill,target,opts);
+      if(!priced)continue;
+      const monsters=[...new Set(priced.segments.map(x=>x.monster))].join(" → ");
+      actions.push({skill,to:target,seconds:priced.seconds,
+        detail:`Train ${skill} ${state[skill]}→${target} on ${monsters} (${priced.kills} kills)`,
+        meta:{kills:priced.kills,xp:priced.totalXp,
+          milestone:skill==="strength"&&target===breakpoint&&target!==immediate?
+            "strength-breakpoint":"level",
+          segments:priced.segments,timeBreakdown:priced.timeBreakdown}});
     }
   }
   for(const skill of ["fishing","cooking","herblaw"]){
