@@ -17,7 +17,7 @@ Implemented in src/progression.js:
 
 Not complete:
 - Full multi-skill shortest-path search and unlocking of Fishing/Cooking/Herblaw crafts.
-- Exact potion recipe, effect duration and material use verified from Microscape data.
+- Strength potion recipe is now verified from the Microscape wiki: Herblaw 13, 1 vial of water + 1 Limpwurt Root, 386 seconds, 735 XP, +5 Strength for 60 minutes. Still missing exact timing for acquiring vial water, combat variance and supply logistics.
 - Shared XP, kill participation, loot eligibility and hit rates for multiplayer encounters.
 - Gear acquisition time, affordability, travel, equipment slots and actual full fight survival.
 - Combat engine still uses provisional accuracy and enemy hit formulas. Ranked loadouts remain estimates.
