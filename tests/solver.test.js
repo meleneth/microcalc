@@ -45,3 +45,15 @@ test("Cow hit chances interpolate only within observations",()=>{
  }
  assert.equal(evaluate(cow,{...defaults,attack:30}).accuracySource,"provisional");
 });
+
+test("itemized supply and eating delay affect farming rates",()=>{
+ const cow=mobs.find(m=>m.name==="Cow");
+ const baseline={...defaults,useFoodEconomy:true,foodId:"sardine",hitpoints:20,foodCount:50,
+   foodRecoveryBonus:0,foodCooldownSeconds:0,foodSupplySeconds:0,eatActionSeconds:0};
+ const quick=evaluate(cow,baseline);
+ const costly=evaluate(cow,{...baseline,foodCooldownSeconds:6,foodSupplySeconds:20});
+ assert.equal(costly.foodEconomy.heal,4);
+ assert.ok(costly.cycle>quick.cycle);
+ assert.ok(costly.xpPerHour<quick.xpPerHour);
+ assert.equal(costly.xpPerKill,16);
+});
