@@ -16,7 +16,7 @@ The wiki publishes monster HP, Attack, Strength and Defence plus an XP table and
 | Formula | Status | Required evidence |
 | --- | --- | --- |
 | Attack versus Defence -> P(hit) | unknown | original game implementation, documented developer specification, or controlled hit/miss trials |
-| Strength and gear -> max hit | unknown | original implementation or repeated observed damage maxima at distinct levels |
+| Player Strength -> max hit | user reports +1 max damage per 6 effective Strength, screenshot: 13 effective Strength gives max hit 3 | verify thresholds at 5/6 and 11/12 and interactions with flat damage gear |
 | Damage distribution after hit | unknown | implementation or raw hit histogram (including zero-damage ambiguity) |
 | Enemy attack speed | unspecified per monster | observed timestamps or implementation |
 | Combat XP per damage and skill training style | unknown | before/after XP measurements for controlled fights |
@@ -43,3 +43,7 @@ Example accuracy observations JSON (invented numbers for **format demonstration*
 ```
 
 The current solver in src/solver.js still uses arbitrary provisional ratio accuracy, max-hit scaling and XP-per-HP settings. Its recommendations should not be interpreted as verified optimal routes. Safe spots are excluded from progression planning.
+
+## Player-reported Strength breakpoint rule (2026-11-23)
+
+The user reports one additional maximum melee damage per six Strength. Their screenshot shows 11 base Strength plus 2 equipment Strength = 13 effective Strength and a displayed maximum melee hit of 3. We implement player max hit as `max(1, 1 + floor(effectiveStrength / 6) + flatDamageBonus)`. The baseline +1 and flat-damage treatment are model assumptions consistent with that screenshot, rather than independently verified game formulas. The enemy maximum hit remains provisional until confirmed.
