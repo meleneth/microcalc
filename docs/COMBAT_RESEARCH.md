@@ -47,3 +47,7 @@ The current solver in src/solver.js still uses arbitrary provisional ratio accur
 ## Player-reported Strength breakpoint rule (2026-11-23)
 
 The user reports one additional maximum melee damage per six Strength. Their screenshot shows 11 base Strength plus 2 equipment Strength = 13 effective Strength and a displayed maximum melee hit of 3. We implement player max hit as `max(1, 1 + floor(effectiveStrength / 6) + flatDamageBonus)`. The baseline +1 and flat-damage treatment are model assumptions consistent with that screenshot, rather than independently verified game formulas. The enemy maximum hit remains provisional until confirmed.
+
+## Between-monster downtime (2026-11-23)
+
+The user reports roughly 3–6 seconds between consecutive monsters. There is currently no confirmed official timing constant from the sources inspected. The combat solver now exposes `respawnDelaySeconds` as a separate parameter, defaulting to 4.5 seconds for sensitivity analysis. `searchSeconds` is reserved for actual loot/search overhead, and switching to another monster is a separate cost again. The previous default of 5 seconds for search was a conflation; it has been reset to zero for new settings. Existing Pinia localStorage settings may retain the previous search value until manually adjusted. Do not count downtime twice. The current expectation-based model charges one delay per kill for sustained farming; a future encounter event simulation should model delays after kills, not before the initial target.
