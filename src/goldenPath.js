@@ -14,7 +14,7 @@ const SKILLS=["attack","strength","defense","fishing","cooking","herblaw"];
 const COMBAT=["attack","strength","defense"];
 const CAP=99;
 const defaultOptions={
-  maxStates:30000,
+  maxStates:100000,
   maxSeconds:3600*24*30,
   maxLevel:45,
   encounterAvailability:["Mouse","Chicken","Giant rat","Cow","Goblin",
