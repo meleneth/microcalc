@@ -2,10 +2,13 @@
 import { computed } from "vue";
 import { usePlanner } from "./stores/planner.js";
 import { sources } from "./data.js";
+import { strengthPotionValue, strengthPotionDependency } from "./progression.js";
 const store=usePlanner();
 const fmt=n=>Number.isFinite(n)?Math.round(n).toLocaleString():"—";
 const hours=s=>Number.isFinite(s)?(s/3600).toFixed(1):"—";
 const knight=computed(()=>store.plan.knight);
+const strengthSupply=computed(()=>strengthPotionDependency(1,store.settings));
+const strengthBoost=computed(()=>strengthPotionValue(store.settings.strength+store.settings.strengthBonus,1,store.settings));
 const inputs=[
  ["attack","Attack level",1,99],["strength","Strength level",1,99],["defense","Defence level",1,99],
  ["hitpoints","Hitpoints",1,999],["attackBonus","Equipment attack",0,500],["strengthBonus","Equipment strength",0,500],
@@ -29,6 +32,12 @@ const inputs=[
     <section class="panel"><div class="section-head"><h2>02 / Combat viability</h2><span class="tag">STANDARD ENCOUNTER</span></div>
       <div class="metrics"><div><small>Time to defeat</small><strong>{{knight.ttk.toFixed(1)}}s</strong></div><div><small>Expected damage</small><strong>{{knight.expectedDamage.toFixed(1)}} HP</strong></div><div><small>Food / kill</small><strong>{{knight.foodNeeded.toFixed(2)}}</strong></div><div><small>Estimated kills / hr</small><strong>{{knight.killsPerHour.toFixed(1)}}</strong></div></div>
       <p class="warning">Expected values are not survival guarantees. Simulating variance and exact game rolls is a future calibration requirement.</p>
+    </section>
+    <section class="panel"><div class="section-head"><h2>SUPPLY / Bear → Strength Potion</h2><span class="tag">HERBLAW 13</span></div>
+      <div class="metrics"><div><small>Bear kills / root (expected)</small><strong>{{strengthSupply.knownBottleneck.expectedKills}}</strong></div>
+      <div><small>Potion max hit gain</small><strong>+{{strengthBoost.maxHitGain}}</strong></div>
+      <div><small>Potion lasts</small><strong>60 min</strong></div><div><small>Herblaw XP per dose</small><strong>735</strong></div></div>
+      <p class="note">1 purchased vial filled with water + 1 Limpwurt Root, 386 seconds per brew. Bear drops the root at 1/32. Expected kills are not a guarantee. {{strengthBoost.damageBreakpointGained?'Your current Strength crosses a damage breakpoint with +5.':'Your current Strength does not cross a damage breakpoint with +5.'}}</p>
     </section>
     <section class="panel"><div class="section-head"><h2>03 / Farming candidates</h2><span class="tag">ESTIMATED XP / HR</span></div>
      <div class="table-wrap"><table><thead><tr><th>Target</th><th>XP/hr</th><th>Kills/hr</th><th>Damage</th></tr></thead><tbody><tr v-for="r in store.candidates.slice(0,12)" :key="r.mob.name"><td>{{r.mob.name}}</td><td>{{fmt(r.xpPerHour)}}</td><td>{{r.killsPerHour.toFixed(1)}}</td><td>{{r.expectedDamage.toFixed(1)}}</td></tr></tbody></table></div>
