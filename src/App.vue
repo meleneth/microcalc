@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onUnmounted } from "vue";
 import { sources } from "./data.js";
-const maxStates=10000;
+const maxStates=30000;
 const status=ref("idle");
 const progress=ref(null);
 const result=ref(null);
@@ -69,19 +69,19 @@ onUnmounted(()=>worker?.terminate());
         <section class="panel">
           <h2>Actions, in order</h2>
           <div class="table-wrap"><table><thead><tr><th>#</th><th>Next action</th><th>Hours</th><th>Accumulated</th></tr></thead>
-            <tbody><tr v-for="(step,i) in result.steps" :key="i">
+            <tbody><tr v-for="(step,i) in result.jobs" :key="i">
               <td>{{i+1}}</td><td>{{step.detail}}
-              <div v-if="step.meta?.timeBreakdown" class="note">
-                Fight {{hours(step.meta.timeBreakdown.combat)}}h ·
-                Between kills {{hours(step.meta.timeBreakdown.respawn)}}h ·
-                Search {{hours(step.meta.timeBreakdown.search)}}h ·
-                Banking {{hours(step.meta.timeBreakdown.banking)}}h ·
-                Food &amp; potions {{hours(step.meta.timeBreakdown.supplies)}}h ·
-                Expected food {{foodCount(step.meta.expectedFood??0)}} ·
-                Food preparation {{hours(step.meta.foodSupplySeconds??0)}}h
+              <div v-if="step.steps?.some(s=>s.meta?.timeBreakdown)" class="note">
+                Fight {{hours(step.steps.reduce((n,s)=>n+(s.meta?.timeBreakdown?.combat??0),0))}}h ·
+                Between kills {{hours(step.steps.reduce((n,s)=>n+(s.meta?.timeBreakdown?.respawn??0),0))}}h ·
+                Search {{hours(step.steps.reduce((n,s)=>n+(s.meta?.timeBreakdown?.search??0),0))}}h ·
+                Banking {{hours(step.steps.reduce((n,s)=>n+(s.meta?.timeBreakdown?.banking??0),0))}}h ·
+                Food &amp; potions {{hours(step.steps.reduce((n,s)=>n+(s.meta?.timeBreakdown?.supplies??0),0))}}h ·
+                Expected food {{foodCount(step.expectedFood??0)}} ·
+                Food preparation {{hours(step.steps.reduce((n,s)=>n+(s.meta?.foodSupplySeconds??0),0))}}h · Potion doses {{foodCount(step.expectedPotions??0)}}
               </div>
-              <div v-if="step.meta?.segments?.length>1" class="note">
-                {{step.meta.segments.map(x=>x.monster+' ('+x.from+'→'+x.to+')').join(' · ')}}
+              <div v-if="step.segments?.length>1" class="note">
+                {{step.segments.map(x=>x.monster+' ('+x.from+'→'+x.to+')').join(' · ')}}
               </div>
               </td><td>{{hours(step.seconds)}}</td><td>{{hours(step.cumulativeSeconds)}}<div class="note">{{foodCount(step.cumulativeExpectedFood??0)}} food eaten</div></td>
             </tr></tbody></table></div>
@@ -89,7 +89,8 @@ onUnmounted(()=>worker?.terminate());
         </section>
         <section class="panel"><h2>Ending levels and equipment</h2>
           <p>Attack {{result.final.attack}} · Strength {{result.final.strength}} · Defence {{result.final.defense}} · Fishing {{result.final.fishing}} · Cooking {{result.final.cooking}} · Herblaw {{result.final.herblaw}}</p>
-          <p class="note">Gear: {{result.final.gear.join(', ')||'none'}}</p>
+          <p class="note">Owned gear: {{result.final.gear.join(', ')||'none'}} · Equipped: {{result.finalEquipment?.join(', ')||'none'}} · Maintained potion: {{result.finalPotion||'none'}}</p>
+          <p class="note">Expected potion doses: {{foodCount(result.expectedPotionDoses)}} · Ingredient collection and mixing: {{hours(result.totalPotionSupplySeconds)}}h, included in route time.</p>
           <p class="warning">Expected-value survival is not proof of survivability. Enemy attack rolls, potion duration accounting, supply acquisition and some monster availability still require measurement.</p>
         </section>
       </template>
