@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { gameConstraints, equipable, candidateLoadouts, dropAcquisition, foxHatDependency, strengthPotionDependency, groupEncounter } from "../src/progression.js";
+import { gameConstraints, equipable, candidateLoadouts, dropAcquisition, foxHatDependency, strengthPotionDependency, strengthPotionValue, groupEncounter } from "../src/progression.js";
 import { earlyGear } from "../src/earlyGear.js";
 test("early equipment respects attack thresholds",()=>{
  const steel=earlyGear.find(g=>g.name==="steel scimitar");
@@ -9,9 +9,14 @@ test("early equipment respects attack thresholds",()=>{
 });
 test("strength potion has bear material dependency, without claiming recipe validated",()=>{
  const d=strengthPotionDependency(2);
- assert.equal(d.recipeVerified,false);
+ assert.equal(d.recipeVerified,true);
+ assert.deepEqual(d.requirements,{herblaw:13});
+ assert.equal(d.xp,1470);
+ assert.equal(d.craftSeconds,772);
  assert.equal(d.knownBottleneck.expectedKills,64);
  assert.equal(d.knownBottleneck.item,"limpwurt root");
+ assert.equal(strengthPotionValue(13).maxHitGain,1);
+ assert.equal(strengthPotionValue(12).maxHitGain,0);
 });
 test("fox hat dependency traces to mouse lucky paw",()=>{
  assert.equal(foxHatDependency().prerequisites[0].expectedKills,1024);
