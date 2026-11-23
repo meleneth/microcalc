@@ -41,26 +41,27 @@ export function foodSupplyCost({
     coinsPerFood:coinsPerRaw/rawYield,
     modeled:true};
 }
-// Expected-value cycle only. Cooling down to eat can either overlap the next
-// monster wait/fight (cooldown-overlap) or block the player's actions (blocking).
+// Expected-value cycle only. Unattended mode charges zero eating downtime;
+// the cooldown is an anti-spam restriction, not a normal per-food time tax.
 export function foodEconomy({
   foodId,foodRecoveryBonus=0,maxHp=10,
   expectedDamagePerKill,foodCount,foodCooldownSeconds,
-  supplySecondsPerFood,eatActionSeconds=0,mode="blocking"
+  supplySecondsPerFood,eatActionSeconds=0,mode="unattended"
 }) {
   if(!findFood(foodId))throw new RangeError("Unknown food");
   for(const n of [maxHp,expectedDamagePerKill,foodCount,foodCooldownSeconds,supplySecondsPerFood,eatActionSeconds])
     if(!Number.isFinite(n)||n<0)throw new RangeError("Food economy inputs must be nonnegative and finite");
-  if(!["blocking","cooldown-overlap"].includes(mode))throw new RangeError("Unknown eating model");
+  if(!["blocking","cooldown-overlap","unattended"].includes(mode))throw new RangeError("Unknown eating model");
   const heal=Math.min(maxHp,nominalHeal(foodId,foodRecoveryBonus));
   const foodPerKill=heal>0?expectedDamagePerKill/heal:Infinity;
   const foodSecondsPerKill=foodPerKill*supplySecondsPerFood;
   // Blocking is deliberately conservative: assumes the cooldown prevents progress.
   // Overlap model charges only the actual eat action; a full event simulation
   // must determine whether subsequent eating is throttled.
-  const eatSecondsPerKill=foodPerKill*(mode==="blocking"?Math.max(foodCooldownSeconds,eatActionSeconds):eatActionSeconds);
+  const eatSecondsPerKill=mode==="unattended"?0:
+    foodPerKill*(mode==="blocking"?Math.max(foodCooldownSeconds,eatActionSeconds):eatActionSeconds);
   return {foodId,heal,foodPerKill,foodSecondsPerKill,eatSecondsPerKill,
     extraSecondsPerKill:foodSecondsPerKill+eatSecondsPerKill,
     theoreticalKillsPerInventory:foodPerKill>0?foodCount/foodPerKill:Infinity,
-    mode,assumption:"Expected-value only: cannot prove survival, cooldown overlap, or auto-eat timing."};
+    mode,assumption:"Unattended mode assumes food can be eaten as needed without slowing combat. A time-stepped simulation must validate cooldown-limited healing and survival."};
 }
