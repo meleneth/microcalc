@@ -6,9 +6,9 @@ import { evaluate, defaults, meleeMaxHit } from "./solver.js";
 import { gameConstraints } from "./progression.js";
 
 // Search actions are *milestones* rather than individual XP ticks.
-// This is a bounded uniform-cost search over explicit, priced transitions.
-// Results are optimal only within the configured milestone/action model and
-// the search budget, NEVER a proof of globally optimal in-game progression.
+// This is an anytime goal-directed best-first search over priced transitions.
+// Dominance is exact only under the model's monotone skill assumptions. The
+// heuristic is intentionally non-admissible, so no global-optimum claim.
 const SKILLS=["attack","strength","defense","fishing","cooking","herblaw"];
 const COMBAT=["attack","strength","defense"];
 const CAP=99;
@@ -200,36 +200,118 @@ function gearActions(state,opts){
   }
   return result;
 }
-class Heap{
+// Weighted best-first exploration: find a feasible route first, then improve
+// the incumbent. The estimate ranks work; it is NOT an admissible A* bound.
+class Heap {
   constructor(){this.a=[];}
-  push(v){let i=this.a.length;this.a.push(v);while(i){const p=(i-1)>>1;if(this.a[p].cost<=v.cost)break;this.a[i]=this.a[p];i=p;}this.a[i]=v;}
-  pop(){const a=this.a;if(!a.length)return null;const root=a[0],last=a.pop();if(!a.length)return root;let i=0;while(2*i+1<a.length){let c=2*i+1;if(c+1<a.length&&a[c+1].cost<a[c].cost)c++;if(a[c].cost>=last.cost)break;a[i]=a[c];i=c;}a[i]=last;return root;}
+  push(v){
+    const a=this.a; let i=a.length;a.push(v);
+    while(i){const p=(i-1)>>1;if(a[p].priority<=v.priority)break;a[i]=a[p];i=p;}a[i]=v;
+  }
+  pop(){
+    const a=this.a;if(!a.length)return null;
+    const top=a[0],last=a.pop();if(!a.length)return top;
+    let i=0;while(2*i+1<a.length){
+      let c=2*i+1;
+      if(c+1<a.length&&a[c+1].priority<a[c].priority)c++;
+      if(a[c].priority>=last.priority)break;
+      a[i]=a[c];i=c;
+    }
+    a[i]=last;return top;
+  }
   get size(){return this.a.length;}
+}
+const routeGuide={attack:30,strength:30,defense:20,cooking:15};
+const remainingXp=(state,k,target)=>Math.max(0,xp[Math.min(99,target)-1]-xp[state[k]-1]);
+function readiness(state,opts){
+  const bonuses=bestEquipped(state).bonuses;
+  // A potential-function guide, not a declaration of actual knight viability.
+  const combat=(state.attack+bonuses.attack)/30+
+    (state.strength+bonuses.strength)/30+state.defense/20;
+  const supply=Math.min(1,state.cooking/15);
+  return combat+supply;
+}
+function estimateRemaining(state,opts,fight){
+  // Project faster future training rather than pricing ALL future XP at level-1 DPS.
+  // This is deliberately non-admissible and is only used for queue ordering.
+  const rate=Math.max(200,(fight?.xpPerHour??200)*2.5);
+  let seconds=0;
+  for(const k of COMBAT)seconds+=remainingXp(state,k,routeGuide[k])*3600/rate;
+  if(state.cooking<routeGuide.cooking){
+    const cookingRate=opts.cookingXpPerAction/
+      (opts.cookingActionSeconds+opts.boughtRawSardineSeconds);
+    seconds+=remainingXp(state,"cooking",routeGuide.cooking)/Math.max(.01,cookingRate);
+  }
+  // The guide does not require Fishing or Herblaw. They must win on the
+  // actual economic effect of their unlocks, rather than being mandatory.
+  return seconds;
+}
+const dominates=(a,b)=>a.cost<=b.cost+1e-9&&
+  COMBAT.every(k=>a.state[k]>=b.state[k]);
+function bucketFor(s){return [s.fishing,s.cooking,s.herblaw,s.gear.join(",")].join("|");}
+function reconstruct(entry,nodes){
+  const steps=[];let key=entry?.key;
+  while(key&&nodes.get(key)?.parent){
+    const n=nodes.get(key);
+    steps.push({...n.action,stateAfter:n.state});
+    key=n.parent;
+  }
+  steps.reverse();let elapsed=0;
+  return steps.map(step=>({...step,cumulativeSeconds:elapsed+=step.seconds}));
 }
 export function* solveGoldenPathProgress(userOptions={}){
   const opts={...defaultOptions,...userOptions};
   for(const v of ["maxStates","maxLevel","minimumKnightKillsPerHour","maxFoodPerKill"])
     if(!Number.isFinite(opts[v])||opts[v]<=0)throw new RangeError(`Invalid ${v}`);
   const initial={attack:1,strength:1,defense:1,fishing:1,cooking:1,herblaw:1,gear:[]};
-  const heap=new Heap(),dist=new Map(),nodes=new Map();
+  const heap=new Heap(),dist=new Map(),nodes=new Map(),buckets=new Map();
   const startKey=toKey(initial);
-  heap.push({key:startKey,cost:0});dist.set(startKey,0);
+  const begin={key:startKey,state:initial,cost:0};
+  dist.set(startKey,0);
   nodes.set(startKey,{state:initial,parent:null,action:null});
-  let expanded=0,best=null,closest=null;
+  buckets.set(bucketFor(initial),[begin]);
+  const firstFight=bestFight(initial,opts);
+  heap.push({...begin,priority:estimateRemaining(initial,opts,firstFight)});
+  let expanded=0,discovered=1,pruned=0,incumbent=null,closest=null;
+  let bestRate=0,stage="feasibility";
+  const fightCache=new Map();
+  const cachedFight=state=>{
+    const key=toKey(state);
+    if(!fightCache.has(key))fightCache.set(key,bestFight(state,opts));
+    return fightCache.get(key);
+  };
+  const snapshot=()=>({
+    type:"progress",phase:stage,expanded,visited:discovered,queued:heap.size,
+    pruned,limit:opts.maxStates,bestKnightRate:bestRate,
+    incumbentSeconds:incumbent?.cost??null,
+    incumbentSteps:incumbent?reconstruct(incumbent,nodes):[],
+    nextAction:incumbent?reconstruct(incumbent,nodes)[0]?.detail??null:
+      closest?reconstruct(closest,nodes)[0]?.detail??null:null,
+    currentLevels:closest?.state??initial
+  });
   while(heap.size&&expanded<opts.maxStates){
-    const node=heap.pop();if(node.cost!==dist.get(node.key))continue;
-    const current=nodes.get(node.key),state=current.state;expanded++;
+    const node=heap.pop();
+    if(dist.get(node.key)!==node.cost)continue;
+    if(incumbent&&node.cost>=incumbent.cost){pruned++;continue;}
+    const current=nodes.get(node.key),state=current.state;
+    expanded++;
     const status=knightAssessment(state,opts);
-    if(expanded===1 || expanded%25===0)yield {type:"progress",phase:"search",
-      expanded,queued:heap.size,visited:dist.size,limit:opts.maxStates,
-      bestKnightRate:closest?.status.best?.killsPerHour??0,
-      currentLevels:{attack:state.attack,strength:state.strength,defense:state.defense,
-        fishing:state.fishing,cooking:state.cooking,herblaw:state.herblaw},
-      elapsedRouteSeconds:node.cost};
-    if(status.ready){best={key:node.key,state,status,cost:node.cost};break;}
-    if(!closest || (status.best?.killsPerHour??0)>(closest.status.best?.killsPerHour??0))
-      closest={key:node.key,state,status,cost:node.cost};
-    if(node.cost>opts.maxSeconds)continue;
+    const rate=status.best?.killsPerHour??0;
+    bestRate=Math.max(bestRate,rate);
+    const grade=readiness(state,opts)+Math.min(2,rate/opts.minimumKnightKillsPerHour);
+    if(!closest||grade>closest.grade+1e-8||
+      (Math.abs(grade-closest.grade)<1e-8&&node.cost<closest.cost))
+      closest={...node,state,status,grade};
+    if(status.ready){
+      if(!incumbent||node.cost<incumbent.cost){
+        incumbent={...node,state,status};
+        stage="optimization";
+        yield snapshot();
+      }
+      continue;
+    }
+    if(expanded===1||expanded%25===0)yield snapshot();
+    if(node.cost>=opts.maxSeconds)continue;
     const actions=[...trainingOptions(state,opts),...gearActions(state,opts)];
     for(const action of actions){
       if(!Number.isFinite(action.seconds)||action.seconds<=0)continue;
@@ -237,31 +319,45 @@ export function* solveGoldenPathProgress(userOptions={}){
       if(action.skill)next[action.skill]=action.to;
       if(action.gear)next.gear=[...state.gear,action.gear].sort();
       const key=toKey(next),cost=node.cost+action.seconds;
-      if(cost>opts.maxSeconds || cost>=(dist.get(key)??Infinity))continue;
-      dist.set(key,cost);nodes.set(key,{state:next,parent:node.key,action});heap.push({key,cost});
+      if(cost>opts.maxSeconds||(incumbent&&cost>=incumbent.cost)||
+        cost>=(dist.get(key)??Infinity))continue;
+      const bucket=bucketFor(next),frontier=buckets.get(bucket)??[];
+      const candidate={key,state:next,cost};
+      if(frontier.some(f=>dominates(f,candidate))){pruned++;continue;}
+      // Keep reconstruction history, but remove dominated states from the live queue.
+      const survivors=[];
+      for(const old of frontier){
+        if(dominates(candidate,old)){
+          if(dist.get(old.key)===old.cost)dist.delete(old.key);
+          pruned++;
+        }else survivors.push(old);
+      }
+      survivors.push(candidate);buckets.set(bucket,survivors);
+      if(!nodes.has(key))discovered++;
+      dist.set(key,cost);
+      nodes.set(key,{state:next,parent:node.key,action});
+      const projected=estimateRemaining(next,opts,cachedFight(next));
+      heap.push({...candidate,priority:cost+1.4*projected});
     }
   }
-  yield {type:"progress",phase:"route",expanded,visited:dist.size,limit:opts.maxStates};
-  const found=best??closest;
-  const steps=[];
-  if(found){
-    let key=found.key;
-    while(nodes.get(key)?.parent){
-      const node=nodes.get(key);
-      steps.push({...node.action,stateAfter:node.state});
-      key=node.parent;
-    }
-    steps.reverse();
-  }
+  stage="route";yield snapshot();
+  const found=incumbent??closest;
+  const steps=reconstruct(found,nodes);
+  const exhausted=heap.size===0;
   return {
-    success:!!best,partial:!best,search:"bounded-uniform-cost",expanded,visited:dist.size,
-    limitReached:expanded>=opts.maxStates,
-    assumptions:{foodSupply:"estimated",combatAccuracy:"partly calibrated",enemyDamage:"provisional",
-      groupCombat:"excluded pending damage attribution",energy:"nonbinding",gear:"drop-sourced only"},
+    success:!!incumbent,partial:!incumbent,search:"anytime-dominance-best-first",
+    termination:incumbent?(exhausted?"search-complete":"budget-exhausted"):
+      exhausted?"frontier-exhausted":"budget-exhausted",
+    expanded,visited:discovered,pruned,limitReached:expanded>=opts.maxStates,
+    assumptions:{foodSupply:"estimated",combatAccuracy:"partly calibrated",
+      enemyDamage:"provisional",groupCombat:"excluded pending damage attribution",
+      energy:"nonbinding",gear:"drop-sourced only"},
     start:initial,final:found?.state??initial,
-    totalSeconds:found?.cost??0,steps,knight:found?.status??knightAssessment(initial,opts),
-    reason:best?"Found minimum time within available transitions and search budget":
-      "No qualifying Black Knight state found within budget. Partial path only; do not call it a golden path."
+    totalSeconds:found?.cost??0,steps,
+    knight:found?.status??knightAssessment(initial,opts),
+    reason:incumbent?"Feasible modeled route found; shortest route not proven.":
+      exhausted?"Search frontier exhausted under the current action model; no feasible route found.":
+      "Search budget exhausted without a feasible route. Showing most progressed state, not claiming impossibility."
   };
 }
 
