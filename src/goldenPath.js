@@ -59,8 +59,13 @@ function bestEquipped(state){
   for(const item of bySlot.values())for(const k of Object.keys(bonuses))bonuses[k]+=item.bonuses[k]||0;
   return {names:[...bySlot.values()].map(g=>g.name),bonuses};
 }
+// Provisional fishing gates: explicit assumptions, not wiki-verified unlocks.
+// Purchased raw sardines do not require Fishing levels.
+const fishingGates={shrimp:1,trout:15,salmon:25,lobster:40,swordfish:45};
 function foodChoices(state,options){
-  const all=foods.filter(f=>f.cookingLevel<=state.cooking&&["shrimp","sardine","trout","salmon","lobster","swordfish","meat","chicken"].includes(f.id));
+  const all=foods.filter(f=>f.cookingLevel<=state.cooking&&
+    ["shrimp","sardine","trout","salmon","lobster","swordfish","meat","chicken"].includes(f.id)&&
+    state.fishing>=(fishingGates[f.id]??1));
   return all.map(f=>({
     id:f.id,heal:f.heal,
     // sardines purchasable RAW, still need cooking and level 5.
