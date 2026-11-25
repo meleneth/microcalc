@@ -9,7 +9,7 @@ export const usePlanner=defineStore("planner",()=>{
   const searchBudget=ref(2000);
   const candidates=computed(()=>rankTargets(settings));
   const plan=computed(()=>solveGoldenPath({maxStates:searchBudget.value,maxLevel:Math.max(30,Math.min(60,goal.value)),
-    respawnDelaySeconds:settings.respawnDelaySeconds,bankSeconds:settings.bankSeconds,killsPerBank:settings.killsPerBank}));
+    respawnDelaySeconds:settings.respawnDelaySeconds,bankSeconds:settings.bankSeconds,killsPerBank:settings.killsPerBank,bagCapacity:settings.bagCapacity,scrapChance:settings.scrapChance}));
   watch(settings,v=>localStorage.setItem("microcalc.settings",JSON.stringify(v)),{deep:true});
   return {settings,goal,searchBudget,candidates,plan};
 });

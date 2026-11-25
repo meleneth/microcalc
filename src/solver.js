@@ -1,5 +1,6 @@
 import { mobs, xp } from "./data.js";
 import { foodEconomy } from "./foodEconomy.js";
+import { bagEconomy } from "./bagEconomy.js";
 export function levelAt(totalXp) {
   if (!Number.isFinite(totalXp) || totalXp < 0) throw new RangeError("XP must be nonnegative");
   let low=0,high=xp.length-1;
@@ -81,13 +82,16 @@ export function evaluate(mob,stats,rules={}) {
   const safe=(stats.hitpoints-expectedDamage)>0 || (effectiveFoodHeal>0 && stats.foodCount>=Math.ceil(effectiveFoodNeeded));
   const respawnDelay=Math.max(0,stats.respawnDelaySeconds??5);
   const searchDelay=Math.max(0,stats.searchSeconds);
-  const bankDelay=Math.max(0,stats.bankSeconds)/Math.max(1,stats.killsPerBank);
+  const bag=bagEconomy(mob.name,{capacity:stats.bagCapacity??25,
+    foodPerKill:effectiveFoodNeeded,scrapChance:stats.scrapChance??0,
+    fallbackKills:stats.killsPerBank??20});
+  const bankDelay=Math.max(0,stats.bankSeconds)/Math.max(1,bag.killsPerBank);
   const supplyDelay=food?food.extraSecondsPerKill:Math.max(0,stats.foodRestockSeconds)*foodNeeded;
   const cycle=ttk+respawnDelay+searchDelay+bankDelay+supplyDelay;
   const timeBreakdown={combat:ttk,respawn:respawnDelay,search:searchDelay,
     banking:bankDelay,supplies:supplyDelay,total:cycle};
   const xpPerKill=combatXpForSoloKill(mob.hp); // 2 XP per actual HP depleted, assuming player deals all damage.
-  return {mob,ttk,attacks,respawnDelay,searchDelay,timeBreakdown,enemyDps,expectedDamage,foodNeeded:effectiveFoodNeeded,foodEconomy:food,safe,maxHit,pHit,accuracySource:cowObserved?"observed-cow-interpolation":"provisional",xpPerKill,xpPerHour:xpPerKill*3600/cycle,killsPerHour:3600/cycle,cycle};
+  return {mob,bag,uninterruptedSeconds:bag.killsPerBank*(ttk+respawnDelay+searchDelay),ttk,attacks,respawnDelay,searchDelay,timeBreakdown,enemyDps,expectedDamage,foodNeeded:effectiveFoodNeeded,foodEconomy:food,safe,maxHit,pHit,accuracySource:cowObserved?"observed-cow-interpolation":"provisional",xpPerKill,xpPerHour:xpPerKill*3600/cycle,killsPerHour:3600/cycle,cycle};
 }
 export function rankTargets(stats) {
   return mobs.map(m=>evaluate(m,stats))
@@ -115,4 +119,4 @@ export function goldenPath(stats,goal={attack:40,strength:40,defense:40}) {
   const knight=evaluate(mobs.find(m=>m.name==="Black knight"),{...state,allowBlackKnight:true});
   return {steps,state,knight,reachable:targets.every(s=>state[s]>=goal[s]),totalSeconds:steps.reduce((n,s)=>n+s.seconds,0),method:"greedy-estimate"};
 }
-export const defaults={attack:1,strength:1,defense:1,hitpoints:10,attackBonus:0,strengthBonus:0,defenseBonus:0,damageBonus:0,cooldown:6,enemyCooldown:6,foodHeal:0,foodCount:0,useFoodEconomy:true,foodId:"trout",foodRecoveryBonus:0,foodCooldownSeconds:0,foodSupplySeconds:0,eatActionSeconds:0,foodCooldownMode:"unattended",regenPerSecond:0,searchSeconds:0,respawnDelaySeconds:5,bankSeconds:90,killsPerBank:20,foodRestockSeconds:8,allowBlackKnight:false};
+export const defaults={attack:1,strength:1,defense:1,hitpoints:10,attackBonus:0,strengthBonus:0,defenseBonus:0,damageBonus:0,cooldown:6,enemyCooldown:6,foodHeal:0,foodCount:0,useFoodEconomy:true,foodId:"trout",foodRecoveryBonus:0,foodCooldownSeconds:0,foodSupplySeconds:0,eatActionSeconds:0,foodCooldownMode:"unattended",regenPerSecond:0,searchSeconds:0,respawnDelaySeconds:5,bankSeconds:90,killsPerBank:20,bagCapacity:25,scrapChance:0,foodRestockSeconds:8,allowBlackKnight:false};

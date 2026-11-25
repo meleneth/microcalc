@@ -2,6 +2,9 @@
 import { ref, computed, onUnmounted } from "vue";
 import { sources } from "./data.js";
 const maxStates=100000;
+const bagCapacity=ref(25);
+const scrapPercent=ref(0);
+const bankSeconds=ref(90);
 const status=ref("idle");
 const progress=ref(null);
 const result=ref(null);
@@ -25,7 +28,7 @@ function run(){
     }
   };
   worker.onerror=e=>{error.value=e.message||"Solver worker failed";status.value="error";worker?.terminate();worker=null;};
-  worker.postMessage({type:"run",options:{maxStates,maxLevel:45}});
+  worker.postMessage({type:"run",options:{maxStates,maxLevel:45,bagCapacity:Number(bagCapacity.value),scrapChance:Number(scrapPercent.value)/100,bankSeconds:Number(bankSeconds.value)}});
 }
 onUnmounted(()=>worker?.terminate());
 </script>
@@ -36,6 +39,12 @@ onUnmounted(()=>worker?.terminate());
       <p class="eyebrow">LEVEL ONE → SUSTAINABLE BLACK KNIGHT FARMING</p>
       <h1>Find the <span>fastest road.</span></h1>
       <p>Calculate whether your next hour is better spent on Attack, a Strength damage breakpoint, equipment, food, or potion preparation. Every choice includes the time it costs and how it changes future combat.</p>
+      <div class="note">
+        <label>Loot bag capacity <input type="number" min="1" max="1000" v-model.number="bagCapacity" :disabled="status==='running'"></label>
+        <label> Scraps per meal (%) <input type="number" min="0" max="100" step="1" v-model.number="scrapPercent" :disabled="status==='running'"></label>
+        <label> Banking trip (seconds) <input type="number" min="0" v-model.number="bankSeconds" :disabled="status==='running'"></label>
+        <p>Scrap chance is unverified; 0% is a lower-bound scenario, not a measured rate.</p>
+      </div>
       <button class="run-button" :disabled="status==='running'" @click="run">{{status==='running'?'Solving…':'▶ Run Solver'}}</button>
     </section>
     <main class="solver-view">

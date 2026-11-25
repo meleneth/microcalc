@@ -86,6 +86,7 @@ function combatStats(state,optionFood,options){
     regenPerSecond:0,foodHeal:optionFood?.heal??0,
     searchSeconds:0,respawnDelaySeconds:options.respawnDelaySeconds??5,
     bankSeconds:options.bankSeconds??90,killsPerBank:options.killsPerBank??20,
+    bagCapacity:options.bagCapacity??25,scrapChance:options.scrapChance??0,
     foodRecoveryBonus:0};
 }
 function evaluateMob(state,mob,opts,food){
@@ -151,7 +152,7 @@ function knightAssessment(state,opts){
 function priceTraining(state,skill,target,opts){
   const segments=[];let seconds=0,kills=0,totalXp=0;
   const foodTotals={};
-  let expectedFood=0,foodSupplySeconds=0,expectedPotions=0,potionSupplySeconds=0;
+  let expectedFood=0,foodSupplySeconds=0,expectedPotions=0,potionSupplySeconds=0,expectedBankTrips=0;
   const timeBreakdown={combat:0,respawn:0,search:0,banking:0,supplies:0};
   for(let current=state[skill];current<target;current++){
     const intermediate={...state,[skill]:current};
@@ -162,6 +163,7 @@ function priceTraining(state,skill,target,opts){
     const duration=n*fight.cycle;
     if(!Number.isFinite(duration)||duration<=0)return null;
     seconds+=duration;kills+=n;totalXp+=amount;
+    expectedBankTrips+=n/fight.bag.killsPerBank;
     const eaten=n*(fight.foodEconomy?.foodPerKill??0);
     const acquiredSeconds=n*(fight.foodEconomy?.foodSecondsPerKill??0);
     const potionCostPerKill=fight.potion?
@@ -190,7 +192,7 @@ function priceTraining(state,skill,target,opts){
       expectedPotions:doses,potionSupplySeconds:doses*(fight.potion?.supplySecondsPerDose??0),
       equipped:bestEquipped(intermediate).names});
   }
-  return {seconds,kills,totalXp,segments,timeBreakdown,expectedFood,foodTotals,foodSupplySeconds,expectedPotions,potionSupplySeconds};
+  return {seconds,kills,totalXp,segments,timeBreakdown,expectedBankTrips,expectedFood,foodTotals,foodSupplySeconds,expectedPotions,potionSupplySeconds};
 }
 function trainingOptions(state,opts){
   const actions=[];
@@ -212,7 +214,7 @@ function trainingOptions(state,opts){
         meta:{kills:priced.kills,xp:priced.totalXp,
           milestone:skill==="strength"&&target===breakpoint&&target!==immediate?
             "strength-breakpoint":"level",
-          segments:priced.segments,timeBreakdown:priced.timeBreakdown,
+          segments:priced.segments,timeBreakdown:priced.timeBreakdown,expectedBankTrips:priced.expectedBankTrips,
           expectedFood:priced.expectedFood,foodTotals:priced.foodTotals,
           foodSupplySeconds:priced.foodSupplySeconds,
           expectedPotions:priced.expectedPotions,potionSupplySeconds:priced.potionSupplySeconds}});
@@ -452,7 +454,8 @@ export function* solveGoldenPathProgress(userOptions={}){
     expanded,visited:discovered,pruned,limitReached:expanded>=opts.maxStates,
     assumptions:{foodSupply:"estimated",combatAccuracy:"partly calibrated",
       enemyDamage:"provisional",groupCombat:"excluded pending damage attribution",
-      energy:"nonbinding",gear:"drop-sourced only"},
+      energy:"nonbinding",gear:"drop-sourced only",bagCapacity:opts.bagCapacity??25,
+      scrapChance:opts.scrapChance??0,banking:"expected full-bag renewal; unknown tables use fallback"},
     start:initial,final:found?.state??initial,
     totalSeconds:found?.cost??0,steps,jobs,
     totalExpectedFood:steps.reduce((sum,step)=>sum+(step.meta?.expectedFood??0),0),
