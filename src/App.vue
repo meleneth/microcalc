@@ -1,7 +1,10 @@
 <script setup>
 import { ref, computed, onUnmounted } from "vue";
 import { sources } from "./data.js";
+import { defaultStartingLevels, startingLevels } from "./startingLevels.js";
 const maxStates=100000;
+const initialLevels=ref({...defaultStartingLevels});
+const validLevels=computed(()=>{try{startingLevels(initialLevels.value);return true;}catch{return false;}});
 const bagCapacity=ref(25);
 const scrapPercent=ref(0);
 const bankSeconds=ref(90);
@@ -16,6 +19,7 @@ const hours=s=>Number.isFinite(s)?(s/3600).toFixed(2):"—";
 const percent=computed(()=>progress.value?.phase==="route"?100:
   Math.min(99,Math.round(100*(progress.value?.expanded??0)/maxStates)));
 function run(){
+  if(!validLevels.value)return;
   if(worker){worker.terminate();worker=null;}
   status.value="running";progress.value=null;result.value=null;error.value="";
   worker=new Worker(new URL("./solver.worker.js",import.meta.url),{type:"module"});
@@ -28,7 +32,7 @@ function run(){
     }
   };
   worker.onerror=e=>{error.value=e.message||"Solver worker failed";status.value="error";worker?.terminate();worker=null;};
-  worker.postMessage({type:"run",options:{maxStates,maxLevel:45,bagCapacity:Number(bagCapacity.value),scrapChance:Number(scrapPercent.value)/100,bankSeconds:Number(bankSeconds.value)}});
+  worker.postMessage({type:"run",options:{maxStates,maxLevel:45,startingLevels:{...initialLevels.value},bagCapacity:Number(bagCapacity.value),scrapChance:Number(scrapPercent.value)/100,bankSeconds:Number(bankSeconds.value)}});
 }
 onUnmounted(()=>worker?.terminate());
 </script>
@@ -36,19 +40,29 @@ onUnmounted(()=>worker?.terminate());
   <div class="app">
     <header><div class="brand"><span class="pixel">▣</span> MICROCALC <span class="muted">/ progression engine</span></div><span class="tag">BLACK KNIGHT / ROUTE SEARCH</span></header>
     <section class="intro">
-      <p class="eyebrow">LEVEL ONE → SUSTAINABLE BLACK KNIGHT FARMING</p>
+      <p class="eyebrow">CURRENT LEVELS → SUSTAINABLE BLACK KNIGHT FARMING</p>
       <h1>Find the <span>fastest road.</span></h1>
       <p>Calculate whether your next hour is better spent on Attack, a Strength damage breakpoint, equipment, food, or potion preparation. Every choice includes the time it costs and how it changes future combat.</p>
+      <div class="note">
+        <h2>Starting levels</h2>
+        <div class="metrics">
+          <label v-for="(_,skill) in initialLevels" :key="skill" style="text-transform:capitalize">
+            {{skill}} <input type="number" min="1" max="99" step="1" v-model.number="initialLevels[skill]" :disabled="status==='running'">
+          </label>
+        </div>
+        <p>Starts at the selected level thresholds, without assumed owned equipment or active potions.</p>
+        <p v-if="!validLevels" class="warning">All starting levels must be integers from 1 to 99.</p>
+      </div>
       <div class="note">
         <label>Loot bag capacity <input type="number" min="1" max="1000" v-model.number="bagCapacity" :disabled="status==='running'"></label>
         <label> Scraps per meal (%) <input type="number" min="0" max="100" step="1" v-model.number="scrapPercent" :disabled="status==='running'"></label>
         <label> Banking trip (seconds) <input type="number" min="0" v-model.number="bankSeconds" :disabled="status==='running'"></label>
         <p>Scrap chance is unverified; 0% is a lower-bound scenario, not a measured rate.</p>
       </div>
-      <button class="run-button" :disabled="status==='running'" @click="run">{{status==='running'?'Solving…':'▶ Run Solver'}}</button>
+      <button class="run-button" :disabled="status==='running'||!validLevels" @click="run">{{status==='running'?'Solving…':'▶ Run Solver'}}</button>
     </section>
     <main class="solver-view">
-      <section v-if="status==='idle'" class="panel"><h2>Ready to explore</h2><p class="note">Two phases: search for the cheapest progression strategy, then reconstruct the recommended route. Starts at level 1 in all six skills, with no assumed free equipment. This is a bounded model, not a guaranteed optimal in-game solution.</p></section>
+      <section v-if="status==='idle'" class="panel"><h2>Ready to explore</h2><p class="note">Two phases: search for the cheapest progression strategy, then reconstruct the recommended route. Starts at the selected skill levels, with no assumed free equipment. This is a bounded model, not a guaranteed optimal in-game solution.</p></section>
       <section v-if="status==='running'" class="panel" aria-live="polite">
         <div class="section-head"><h2>{{progress?.phase==='route'?'Phase 2 / Reconstructing route':progress?.phase==='optimization'?'Phase 2 / Improving the best route':'Phase 1 / Finding a feasible route'}}</h2><span class="tag">RUNNING</span></div>
         <div class="progress-track"><div class="progress-fill" :style="{width:percent+'%'}"></div></div>

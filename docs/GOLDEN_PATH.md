@@ -2,7 +2,7 @@
 
 Run `npm test` and `npm run dev`, or `docker compose --profile dev up dev`.
 
-The new planner starts from six skills at **level 1**, independent of the current player status. It is a bounded uniform-cost (Dijkstra) search over milestone actions. It considers:
+The planner starts at editable skill levels, defaulting to Attack 20, Strength 20, Defence 10, Fishing 20, Cooking 15 and Herblaw 5. Pass `startingLevels` to the solver to override any skill; pass six ones to reproduce the original level-one baseline. Initial XP is assumed to be exactly the selected level threshold. It is a bounded uniform-cost (Dijkstra) search over milestone actions. It considers:
 
 - Combat training on accessible, solo, non-safe monsters, factoring HP, 2 XP per actual damage, respawn, expected food consumption, and food preparation.
 - Fishing, Cooking, and Herblaw training using editable activity timing assumptions.

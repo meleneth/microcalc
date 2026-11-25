@@ -1,6 +1,6 @@
 # Microcalc
 
-A one-button, level-one progression planner for Microscape.
+A progression planner for Microscape with editable starting skill levels.
 
 ## Run
 
@@ -24,8 +24,7 @@ The two-phase workflow first searches for a feasible route, then improves any
 incumbent it finds. It runs in a Web Worker and streams explored states,
 discovered states, dominated-state pruning and the best route cost. The final
 route is reconstructed from the search history. Search is heuristic and bounded;
-it does **not** certify the globally cheapest route. The player starts with level-one Attack, Strength, Defence, Fishing,
-Cooking and Herblaw.
+it does **not** certify the globally cheapest route. The player starts at editable levels (Attack 20, Strength 20, Defence 10, Fishing 20, Cooking 15 and Herblaw 5 by default).
 
 It compares a single combat level against reaching the next **effective**
 Strength damage breakpoint, along with food production, equipment drops,

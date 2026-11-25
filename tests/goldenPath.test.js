@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {solveGoldenPath,solveGoldenPathProgress} from "../src/goldenPath.js";
-test("search starts from level one and ignores the user's current levels",()=>{
+import {solveGoldenPath as solve,solveGoldenPathProgress as progress} from "../src/goldenPath.js";
+const levelOne={attack:1,strength:1,defense:1,fishing:1,cooking:1,herblaw:1};
+const solveGoldenPath=options=>solve({startingLevels:levelOne,...options});
+const solveGoldenPathProgress=options=>progress({startingLevels:levelOne,...options});
+test("search supports an explicit level-one baseline",()=>{
  const r=solveGoldenPath({maxStates:150,maxLevel:20,minimumKnightKillsPerHour:999});
  assert.deepEqual([r.start.attack,r.start.strength,r.start.defense,r.start.fishing,r.start.cooking,r.start.herblaw],[1,1,1,1,1,1]);
  assert.equal(r.search,"anytime-dominance-best-first");
@@ -94,4 +97,18 @@ test("Tutorial Bay is excluded even when requested in encounter availability",()
  assert.ok(r.steps.every(step=>
    !(step.meta?.segments??[]).some(segment=>segment.monster==="Island rodent")));
  assert.ok(r.jobs.every(job=>!job.detail.includes("Island rodent")));
+});
+
+test("default route starts at the requested current levels",()=>{
+ const r=solve({maxStates:5,maxLevel:45,minimumKnightKillsPerHour:999});
+ assert.deepEqual(r.start,{attack:20,strength:20,defense:10,fishing:20,cooking:15,herblaw:5,gear:[],potion:null});
+ for(const step of r.steps)if(step.skill)assert.ok(step.stateAfter[step.skill]>=r.start[step.skill]);
+});
+test("custom levels override defaults and invalid levels fail loudly",()=>{
+ const r=solve({maxStates:1,startingLevels:{attack:23}});
+ assert.equal(r.start.attack,23);
+ assert.equal(r.start.strength,20);
+ assert.throws(()=>solve({startingLevels:{attack:0}}),RangeError);
+ assert.throws(()=>solve({startingLevels:{attack:20.5}}),RangeError);
+ assert.throws(()=>solve({startingLevels:{unknown:5}}),RangeError);
 });

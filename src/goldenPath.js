@@ -1,4 +1,5 @@
 import { xp, mobs } from "./data.js";
+import { startingLevels } from "./startingLevels.js";
 import { earlyGear } from "./earlyGear.js";
 import { lootTables, expectedKillsForDrop } from "./lootTables.js";
 import { foods } from "./foods.js";
@@ -364,7 +365,7 @@ export function* solveGoldenPathProgress(userOptions={}){
   const opts={...defaultOptions,...userOptions};
   for(const v of ["maxStates","maxLevel","minimumKnightKillsPerHour","maxFoodPerKill"])
     if(!Number.isFinite(opts[v])||opts[v]<=0)throw new RangeError(`Invalid ${v}`);
-  const initial={attack:1,strength:1,defense:1,fishing:1,cooking:1,herblaw:1,gear:[],potion:null};
+  const initial={...startingLevels(opts.startingLevels),gear:[],potion:null};
   const heap=new Heap(),dist=new Map(),nodes=new Map(),buckets=new Map();
   const startKey=toKey(initial);
   const begin={key:startKey,state:initial,cost:0};
