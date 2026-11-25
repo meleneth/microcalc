@@ -2,8 +2,10 @@
 import { ref, computed, onUnmounted } from "vue";
 import { sources } from "./data.js";
 import { defaultStartingLevels, startingLevels } from "./startingLevels.js";
+import { defaultStartingGear, startingGearChoices } from "./startingGear.js";
 const maxStates=100000;
 const initialLevels=ref({...defaultStartingLevels});
+const ownedGear=ref([...defaultStartingGear]);
 const validLevels=computed(()=>{try{startingLevels(initialLevels.value);return true;}catch{return false;}});
 const bagCapacity=ref(25);
 const scrapPercent=ref(0);
@@ -34,7 +36,7 @@ function run(){
     }
   };
   worker.onerror=e=>{error.value=e.message||"Solver worker failed";status.value="error";worker?.terminate();worker=null;};
-  worker.postMessage({type:"run",options:{maxStates,maxLevel:45,startingLevels:{...initialLevels.value},bagCapacity:Number(bagCapacity.value),scrapChance:Number(scrapPercent.value)/100,bankSeconds:Number(bankSeconds.value)}});
+  worker.postMessage({type:"run",options:{maxStates,maxLevel:45,startingLevels:{...initialLevels.value},startingGear:[...ownedGear.value],bagCapacity:Number(bagCapacity.value),scrapChance:Number(scrapPercent.value)/100,bankSeconds:Number(bankSeconds.value)}});
 }
 onUnmounted(()=>worker?.terminate());
 </script>
@@ -52,8 +54,20 @@ onUnmounted(()=>worker?.terminate());
             {{skill}} <input type="number" min="1" max="99" step="1" v-model.number="initialLevels[skill]" :disabled="status==='running'">
           </label>
         </div>
-        <p>Starts at the selected level thresholds, without assumed owned equipment or active potions.</p>
+        <p>Starts at the selected level thresholds with the owned equipment below and no active potions.</p>
         <p v-if="!validLevels" class="warning">All starting levels must be integers from 1 to 99.</p>
+      </div>
+      <div class="note">
+        <h2>Starting equipment</h2>
+        <details>
+          <summary>{{ownedGear.join(', ')||'None owned'}}</summary>
+          <div class="metrics">
+            <label v-for="item in startingGearChoices" :key="item">
+              <input type="checkbox" :value="item" v-model="ownedGear" :disabled="status==='running'"> {{item}}
+            </label>
+          </div>
+        </details>
+        <p>Fox hat and gardener's gloves are tracked as owned; unverified bonuses are not applied.</p>
       </div>
       <div class="note">
         <label>Loot bag capacity <input type="number" min="1" max="1000" v-model.number="bagCapacity" :disabled="status==='running'"></label>
@@ -64,7 +78,7 @@ onUnmounted(()=>worker?.terminate());
       <button class="run-button" :disabled="status==='running'||!validLevels" @click="run">{{status==='running'?'Solving…':'▶ Run Solver'}}</button>
     </section>
     <main class="solver-view">
-      <section v-if="status==='idle'" class="panel"><h2>Ready to explore</h2><p class="note">Two phases: search for the cheapest progression strategy, then reconstruct the recommended route. Starts at the selected skill levels, with no assumed free equipment. This is a bounded model, not a guaranteed optimal in-game solution.</p></section>
+      <section v-if="status==='idle'" class="panel"><h2>Ready to explore</h2><p class="note">Two phases: search for the cheapest progression strategy, then reconstruct the recommended route. Starts at the selected skill levels, with the selected starting equipment. This is a bounded model, not a guaranteed optimal in-game solution.</p></section>
       <section v-if="status==='running'" class="panel" aria-live="polite">
         <div class="section-head"><h2>{{progress?.phase==='route'?'Phase 2 / Reconstructing route':progress?.phase==='optimization'?'Phase 2 / Improving the best route':'Phase 1 / Finding a feasible route'}}</h2><span class="tag">RUNNING</span></div>
         <div class="progress-track"><div class="progress-fill" :style="{width:percent+'%'}"></div></div>

@@ -1,5 +1,6 @@
 import { xp, mobs } from "./data.js";
 import { startingLevels } from "./startingLevels.js";
+import { startingGear } from "./startingGear.js";
 import { earlyGear } from "./earlyGear.js";
 import { lootTables, expectedKillsForDrop } from "./lootTables.js";
 import { foods } from "./foods.js";
@@ -382,7 +383,7 @@ export function* solveGoldenPathProgress(userOptions={}){
   const opts={...defaultOptions,...userOptions};
   for(const v of ["maxStates","maxLevel","minimumKnightKillsPerHour","maxFoodPerKill"])
     if(!Number.isFinite(opts[v])||opts[v]<=0)throw new RangeError(`Invalid ${v}`);
-  const initial={...startingLevels(opts.startingLevels),gear:[],potion:null};
+  const initial={...startingLevels(opts.startingLevels),gear:startingGear(opts.startingGear),potion:null};
   const heap=new Heap(),dist=new Map(),nodes=new Map(),buckets=new Map();
   const startKey=toKey(initial);
   const begin={key:startKey,state:initial,cost:0,history:{state:initial,parent:null,action:null}};
@@ -480,7 +481,7 @@ export function* solveGoldenPathProgress(userOptions={}){
     expanded,visited:discovered,pruned,limitReached:expanded>=opts.maxStates,
     assumptions:{foodSupply:"estimated",combatAccuracy:"partly calibrated",
       enemyDamage:"provisional",groupCombat:"excluded pending damage attribution",
-      energy:"nonbinding",gear:"drop-sourced only",bagCapacity:opts.bagCapacity??25,
+      energy:"nonbinding",gear:"starting inventory plus drop-sourced upgrades",bagCapacity:opts.bagCapacity??25,
       scrapChance:opts.scrapChance??0,banking:"expected full-bag renewal; unknown tables use fallback"},
     start:initial,
     reason:incumbent?"Feasible modeled route found; shortest route not proven.":

@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {solveGoldenPath as solve,solveGoldenPathProgress as progress} from "../src/goldenPath.js";
 const levelOne={attack:1,strength:1,defense:1,fishing:1,cooking:1,herblaw:1};
-const solveGoldenPath=options=>solve({startingLevels:levelOne,...options});
-const solveGoldenPathProgress=options=>progress({startingLevels:levelOne,...options});
+const solveGoldenPath=options=>solve({startingLevels:levelOne,startingGear:[],...options});
+const solveGoldenPathProgress=options=>progress({startingLevels:levelOne,startingGear:[],...options});
 test("search supports an explicit level-one baseline",()=>{
  const r=solveGoldenPath({maxStates:150,maxLevel:20,minimumKnightKillsPerHour:999});
  assert.deepEqual([r.start.attack,r.start.strength,r.start.defense,r.start.fishing,r.start.cooking,r.start.herblaw],[1,1,1,1,1,1]);
@@ -101,7 +101,7 @@ test("Tutorial Bay is excluded even when requested in encounter availability",()
 
 test("default route starts at the requested current levels",()=>{
  const r=solve({maxStates:5,maxLevel:45,minimumKnightKillsPerHour:999});
- assert.deepEqual(r.start,{attack:20,strength:20,defense:10,fishing:20,cooking:15,herblaw:5,gear:[],potion:null});
+ assert.deepEqual(r.start,{attack:20,strength:20,defense:10,fishing:20,cooking:15,herblaw:5,gear:["fox hat","gardener's gloves","steel scimitar"],potion:null});
  for(const step of r.steps)if(step.skill)assert.ok(step.stateAfter[step.skill]>=r.start[step.skill]);
 });
 test("custom levels override defaults and invalid levels fail loudly",()=>{
@@ -128,4 +128,13 @@ test("live snapshots expose a consistent best route and never regress",()=>{
  }
  assert.deepEqual(item.value.jobs,prev.jobs);
  assert.equal(item.value.totalSeconds,prev.totalSeconds);
+});
+
+test("owned starting scimitar is equipped without acquisition cost",()=>{
+ const r=solve({maxStates:1,minimumKnightKillsPerHour:999});
+ assert.ok(r.finalEquipment.includes("steel scimitar"));
+ assert.ok(r.start.gear.includes("fox hat"));
+ assert.ok(r.start.gear.includes("gardener's gloves"));
+ assert.ok(!r.steps.some(s=>s.gear==="steel scimitar"));
+ assert.deepEqual(solve({maxStates:1,startingGear:[]}).start.gear,[]);
 });
