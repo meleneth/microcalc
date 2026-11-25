@@ -112,3 +112,20 @@ test("custom levels override defaults and invalid levels fail loudly",()=>{
  assert.throws(()=>solve({startingLevels:{attack:20.5}}),RangeError);
  assert.throws(()=>solve({startingLevels:{unknown:5}}),RangeError);
 });
+
+test("live snapshots expose a consistent best route and never regress",()=>{
+ const g=solveGoldenPathProgress({maxStates:100,maxLevel:25,minimumKnightKillsPerHour:10,
+   startingLevels:{attack:20,strength:20,defense:10,fishing:20,cooking:15,herblaw:5}});
+ let prev=null,item=g.next();
+ while(!item.done){
+  const plan=item.value.bestPlan;
+  assert.ok(plan);
+  assert.ok(Math.abs(plan.steps.reduce((n,s)=>n+s.seconds,0)-plan.totalSeconds)<1e-6);
+  assert.ok(Math.abs(plan.jobs.reduce((n,s)=>n+s.seconds,0)-plan.totalSeconds)<1e-6);
+  if(prev?.success){assert.ok(plan.success);assert.ok(plan.totalSeconds<=prev.totalSeconds+1e-8);}
+  else if(prev&&!plan.success)assert.ok(plan.score>=prev.score-1e-8);
+  prev=plan;item=g.next();
+ }
+ assert.deepEqual(item.value.jobs,prev.jobs);
+ assert.equal(item.value.totalSeconds,prev.totalSeconds);
+});

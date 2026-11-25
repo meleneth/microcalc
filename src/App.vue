@@ -12,6 +12,8 @@ const status=ref("idle");
 const progress=ref(null);
 const result=ref(null);
 const error=ref("");
+const displayedPlan=computed(()=>result.value??progress.value?.bestPlan??null);
+const livePlan=computed(()=>status.value==="running");
 let worker=null;
 const fmt=n=>Number.isFinite(n)?Math.round(n).toLocaleString():"—";
 const foodCount=n=>Number.isFinite(n)?n.toFixed(1):"—";
@@ -75,24 +77,24 @@ onUnmounted(()=>worker?.terminate());
         <p v-if="progress?.incumbentSeconds!==null&&progress?.incumbentSeconds!==undefined" class="summary">Best feasible route: {{hours(progress.incumbentSeconds)}} hours · {{progress.incumbentSteps?.length??0}} steps</p><p v-if="progress?.nextAction" class="note">Best next action: {{progress.nextAction}}</p><p class="note">{{fmt(progress?.pruned??0)}} dominated or over-budget states pruned. The bar shows the state budget used, not a completion-time prediction.</p>
       </section>
       <section v-if="status==='error'" class="panel"><h2>Solver failed</h2><p class="warning">{{error}}</p><button class="run-button" @click="run">Retry</button></section>
-      <template v-if="result">
+      <template v-if="displayedPlan">
         <section class="panel">
-          <div class="section-head"><h2>Phase 2 / Recommended route</h2><span class="tag">{{result.success?'GOAL REACHED':'PARTIAL RESULT'}}</span></div>
-          <p class="summary">{{result.success?'Feasible modeled Black Knight route found':'No feasible route found within search budget'}}</p>
+          <div class="section-head"><h2>{{livePlan?'Best route so far':'Recommended route'}}</h2><span class="tag">{{livePlan?(displayedPlan.success?'BEST FEASIBLE':'PROVISIONAL'):displayedPlan.success?'GOAL REACHED':'PARTIAL RESULT'}}</span></div>
+          <p class="summary">{{displayedPlan.success?'Feasible modeled Black Knight route found':livePlan?'Highest readiness score so far; goal not yet reached':'No feasible route found within search budget'}}</p>
           <div class="metrics">
-            <div><small>Estimated hours</small><strong>{{hours(result.totalSeconds)}}</strong></div>
-            <div><small>Expected food eaten</small><strong>{{foodCount(result.totalExpectedFood)}}</strong></div>
-            <div><small>Evaluated states</small><strong>{{fmt(result.expanded)}}</strong></div>
-            <div><small>Knight kills/hr</small><strong>{{(result.knight.best?.killsPerHour??0).toFixed(1)}}</strong></div>
+            <div><small>Estimated hours</small><strong>{{hours(displayedPlan.totalSeconds)}}</strong></div>
+            <div><small>Expected food eaten</small><strong>{{foodCount(displayedPlan.totalExpectedFood)}}</strong></div>
+            <div><small>Evaluated states</small><strong>{{fmt(result?.expanded??progress?.expanded??0)}}</strong></div>
+            <div><small>Knight kills/hr</small><strong>{{(displayedPlan.knight.best?.killsPerHour??0).toFixed(1)}}</strong></div>
           </div>
-          <p :class="result.success?'note':'warning'">{{result.reason}}</p>
-          <p class="note">Food totals: {{Object.entries(result.foodTotals??{}).map(([id,n])=>id+' '+foodCount(n)).join(' · ')||'none'}}. Preparation and gathering {{hours(result.totalFoodSupplySeconds)}}h, already included in the route time. Fractions represent expected consumption.</p>
+          <p v-if="!livePlan" :class="displayedPlan.success?'note':'warning'">{{result?.reason}}</p><p v-else class="note">Live search: feasible routes are ranked by lowest total time; until then, the highest readiness score wins.</p>
+          <p class="note">Food totals: {{Object.entries(displayedPlan.foodTotals??{}).map(([id,n])=>id+' '+foodCount(n)).join(' · ')||'none'}}. Preparation and gathering {{hours(displayedPlan.totalFoodSupplySeconds)}}h, already included in the route time. Fractions represent expected consumption.</p>
           <p class="note">Each combat training step uses the best modeled XP/hour fight available at that state. Combat XP credits 2× actual monster HP removed; food preparation, respawn, banking, and potion supply are included as estimated costs. Unverified game mechanics remain estimates.</p>
         </section>
         <section class="panel">
           <h2>Actions, in order</h2>
           <div class="table-wrap"><table><thead><tr><th>#</th><th>Next action</th><th>Hours</th><th>Accumulated</th></tr></thead>
-            <tbody><tr v-for="(step,i) in result.jobs" :key="i">
+            <tbody><tr v-for="(step,i) in displayedPlan.jobs" :key="i">
               <td>{{i+1}}</td><td>{{step.detail}}
               <div v-if="step.steps?.some(s=>s.meta?.timeBreakdown)" class="note">
                 Fight {{hours(step.steps.reduce((n,s)=>n+(s.meta?.timeBreakdown?.combat??0),0))}}h ·
@@ -108,12 +110,12 @@ onUnmounted(()=>worker?.terminate());
               </div>
               </td><td>{{hours(step.seconds)}}</td><td>{{hours(step.cumulativeSeconds)}}<div class="note">{{foodCount(step.cumulativeExpectedFood??0)}} food eaten</div></td>
             </tr></tbody></table></div>
-          <p v-if="!result.steps.length" class="note">The search found no supported progression action on the selected route.</p>
+          <p v-if="!displayedPlan.steps.length" class="note">No progression actions in this route yet.</p>
         </section>
         <section class="panel"><h2>Ending levels and equipment</h2>
-          <p>Attack {{result.final.attack}} · Strength {{result.final.strength}} · Defence {{result.final.defense}} · Fishing {{result.final.fishing}} · Cooking {{result.final.cooking}} · Herblaw {{result.final.herblaw}}</p>
-          <p class="note">Owned gear: {{result.final.gear.join(', ')||'none'}} · Equipped: {{result.finalEquipment?.join(', ')||'none'}} · Maintained potion: {{result.finalPotion||'none'}}</p>
-          <p class="note">Expected potion doses: {{foodCount(result.expectedPotionDoses)}} · Ingredient collection and mixing: {{hours(result.totalPotionSupplySeconds)}}h, included in route time.</p>
+          <p>Attack {{displayedPlan.final.attack}} · Strength {{displayedPlan.final.strength}} · Defence {{displayedPlan.final.defense}} · Fishing {{displayedPlan.final.fishing}} · Cooking {{displayedPlan.final.cooking}} · Herblaw {{displayedPlan.final.herblaw}}</p>
+          <p class="note">Owned gear: {{displayedPlan.final.gear.join(', ')||'none'}} · Equipped: {{displayedPlan.finalEquipment?.join(', ')||'none'}} · Maintained potion: {{displayedPlan.finalPotion||'none'}}</p>
+          <p class="note">Expected potion doses: {{foodCount(displayedPlan.expectedPotionDoses)}} · Ingredient collection and mixing: {{hours(displayedPlan.totalPotionSupplySeconds)}}h, included in route time.</p>
           <p class="warning">Expected-value survival is not proof of survivability. Enemy attack rolls, potion duration accounting, supply acquisition and some monster availability still require measurement.</p>
         </section>
       </template>

@@ -348,18 +348,35 @@ function estimateRemaining(state,opts,fight){
 const dominates=(a,b)=>a.cost<=b.cost+1e-9&&
   COMBAT.every(k=>a.state[k]>=b.state[k]);
 function bucketFor(s){return [s.fishing,s.cooking,s.herblaw,s.gear.join(","),s.potion??"none"].join("|");}
-function reconstruct(entry,nodes){
-  const steps=[];let key=entry?.key;
-  while(key&&nodes.get(key)?.parent){
-    const n=nodes.get(key);
-    steps.push({...n.action,stateAfter:n.state});
-    key=n.parent;
-  }
+function reconstruct(entry){
+  const steps=[];
+  for(let node=entry?.history;node?.parent;node=node.parent)
+    steps.push({...node.action,stateAfter:node.state});
   steps.reverse();let elapsed=0,cumulativeFood=0;
   return steps.map(step=>({
     ...step,cumulativeSeconds:elapsed+=step.seconds,
     cumulativeExpectedFood:cumulativeFood+=step.meta?.expectedFood??0
   }));
+}
+function routeView(entry,initial){
+  const steps=reconstruct(entry);
+  const final=entry?.state??initial;
+  return {
+    success:!!entry?.status?.ready,
+    totalSeconds:entry?.cost??0,steps,jobs:buildRouteJobs(steps,initial,bestEquipped),
+    totalExpectedFood:steps.reduce((n,s)=>n+(s.meta?.expectedFood??0),0),
+    totalFoodSupplySeconds:steps.reduce((n,s)=>n+(s.meta?.foodSupplySeconds??0),0),
+    expectedPotionDoses:steps.reduce((n,s)=>n+(s.meta?.expectedPotions??0),0),
+    totalPotionSupplySeconds:steps.reduce((n,s)=>n+(s.meta?.potionSupplySeconds??0),0),
+    final,finalEquipment:bestEquipped(final).names,finalPotion:final.potion,
+    foodTotals:steps.reduce((totals,step)=>{
+      for(const [id,quantity] of Object.entries(step.meta?.foodTotals??{}))
+        totals[id]=(totals[id]??0)+quantity;
+      return totals;
+    },{}),
+    knight:entry?.status??{best:null},
+    score:entry?.grade??null
+  };
 }
 export function* solveGoldenPathProgress(userOptions={}){
   const opts={...defaultOptions,...userOptions};
@@ -368,7 +385,7 @@ export function* solveGoldenPathProgress(userOptions={}){
   const initial={...startingLevels(opts.startingLevels),gear:[],potion:null};
   const heap=new Heap(),dist=new Map(),nodes=new Map(),buckets=new Map();
   const startKey=toKey(initial);
-  const begin={key:startKey,state:initial,cost:0};
+  const begin={key:startKey,state:initial,cost:0,history:{state:initial,parent:null,action:null}};
   dist.set(startKey,0);
   nodes.set(startKey,{state:initial,parent:null,action:null});
   buckets.set(bucketFor(initial),[begin]);
@@ -382,37 +399,45 @@ export function* solveGoldenPathProgress(userOptions={}){
     if(!fightCache.has(key))fightCache.set(key,bestFight(state,opts));
     return fightCache.get(key);
   };
-  const snapshot=()=>({
-    type:"progress",phase:stage,expanded,visited:discovered,queued:heap.size,
-    pruned,limit:opts.maxStates,bestKnightRate:bestRate,
-    incumbentSeconds:incumbent?.cost??null,
-    incumbentSteps:incumbent?buildRouteJobs(reconstruct(incumbent,nodes),initial,bestEquipped):[],
-    nextAction:incumbent?buildRouteJobs(reconstruct(incumbent,nodes),initial,bestEquipped)[0]?.detail??null:
-      closest?buildRouteJobs(reconstruct(closest,nodes),initial,bestEquipped)[0]?.detail??null:null,
-    currentLevels:closest?.state??initial
-  });
+  let publishedEntry=null,publishedRoute=null;
+  const snapshot=()=>{
+    const selected=incumbent??closest;
+    if(selected!==publishedEntry||!publishedRoute){
+      publishedEntry=selected;
+      publishedRoute=routeView(selected,initial);
+    }
+    return {
+      type:"progress",phase:stage,expanded,visited:discovered,queued:heap.size,
+      pruned,limit:opts.maxStates,bestKnightRate:bestRate,
+      incumbentSeconds:incumbent?.cost??null,
+      incumbentSteps:incumbent?publishedRoute.jobs:[],
+      nextAction:publishedRoute.jobs[0]?.detail??null,
+      currentLevels:publishedRoute.final,
+      bestPlan:publishedRoute
+    };
+  };
   while(heap.size&&expanded<opts.maxStates){
     const node=heap.pop();
     if(dist.get(node.key)!==node.cost)continue;
     if(incumbent&&node.cost>=incumbent.cost){pruned++;continue;}
-    const current=nodes.get(node.key),state=current.state;
+    const state=node.state;
     expanded++;
     const status=knightAssessment(state,opts);
     const rate=status.best?.killsPerHour??0;
     bestRate=Math.max(bestRate,rate);
     const grade=readiness(state,opts)+Math.min(2,rate/opts.minimumKnightKillsPerHour);
-    if(!closest||grade>closest.grade+1e-8||
-      (Math.abs(grade-closest.grade)<1e-8&&node.cost<closest.cost))
-      closest={...node,state,status,grade};
+    const improved=!closest||grade>closest.grade+1e-8||
+      (Math.abs(grade-closest.grade)<1e-8&&node.cost<closest.cost);
+    if(improved)closest={...node,state,status,grade};
     if(status.ready){
       if(!incumbent||node.cost<incumbent.cost){
-        incumbent={...node,state,status};
+        incumbent={...node,state,status,grade};
         stage="optimization";
         yield snapshot();
       }
       continue;
     }
-    if(expanded===1||expanded%25===0)yield snapshot();
+    if((improved&&!incumbent)||expanded===1||expanded%25===0)yield snapshot();
     if(node.cost>=opts.maxSeconds)continue;
     const actions=[...trainingOptions(state,opts),...gearActions(state,opts),...potionActions(state,opts)];
     for(const action of actions){
@@ -425,7 +450,7 @@ export function* solveGoldenPathProgress(userOptions={}){
       if(cost>opts.maxSeconds||(incumbent&&cost>=incumbent.cost)||
         cost>=(dist.get(key)??Infinity))continue;
       const bucket=bucketFor(next),frontier=buckets.get(bucket)??[];
-      const candidate={key,state:next,cost};
+      const candidate={key,state:next,cost,history:{state:next,parent:node.history,action}};
       if(frontier.some(f=>dominates(f,candidate))){pruned++;continue;}
       // Keep reconstruction history, but remove dominated states from the live queue.
       const survivors=[];
@@ -445,10 +470,10 @@ export function* solveGoldenPathProgress(userOptions={}){
   }
   stage="route";yield snapshot();
   const found=incumbent??closest;
-  const steps=reconstruct(found,nodes);
-  const jobs=buildRouteJobs(steps,initial,bestEquipped);
+  const view=routeView(found,initial);
   const exhausted=heap.size===0;
   return {
+    ...view,
     success:!!incumbent,partial:!incumbent,search:"anytime-dominance-best-first",
     termination:incumbent?(exhausted?"search-complete":"budget-exhausted"):
       exhausted?"frontier-exhausted":"budget-exhausted",
@@ -457,20 +482,7 @@ export function* solveGoldenPathProgress(userOptions={}){
       enemyDamage:"provisional",groupCombat:"excluded pending damage attribution",
       energy:"nonbinding",gear:"drop-sourced only",bagCapacity:opts.bagCapacity??25,
       scrapChance:opts.scrapChance??0,banking:"expected full-bag renewal; unknown tables use fallback"},
-    start:initial,final:found?.state??initial,
-    totalSeconds:found?.cost??0,steps,jobs,
-    totalExpectedFood:steps.reduce((sum,step)=>sum+(step.meta?.expectedFood??0),0),
-    totalFoodSupplySeconds:steps.reduce((sum,step)=>sum+(step.meta?.foodSupplySeconds??0),0),
-    expectedPotionDoses:steps.reduce((sum,step)=>sum+(step.meta?.expectedPotions??0),0),
-    totalPotionSupplySeconds:steps.reduce((sum,step)=>sum+(step.meta?.potionSupplySeconds??0),0),
-    finalEquipment:bestEquipped(found?.state??initial).names,
-    finalPotion:found?.state?.potion??null,
-    foodTotals:steps.reduce((totals,step)=>{
-      for(const [id,quantity] of Object.entries(step.meta?.foodTotals??{}))
-        totals[id]=(totals[id]??0)+quantity;
-      return totals;
-    },{}),
-    knight:found?.status??knightAssessment(initial,opts),
+    start:initial,
     reason:incumbent?"Feasible modeled route found; shortest route not proven.":
       exhausted?"Search frontier exhausted under the current action model; no feasible route found.":
       "Search budget exhausted without a feasible route. Showing most progressed state, not claiming impossibility."
